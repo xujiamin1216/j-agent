@@ -17,7 +17,7 @@ python -m pytest tests/ -v
 python -m pytest tests/test_tools.py::TestToolRegistry::test_execute_success -v  # 单个测试
 ```
 
-配置通过 `.env` 文件进行（参见 `.env.example`）。必填项：`J_AGENT_PROVIDER`（claude/openai）和 `J_AGENT_API_KEY`。可选：`J_AGENT_BASE_URL`（自定义 API 端点，未设置时使用 provider 默认值）。
+配置通过 `.env` 文件进行（参见 `.env.example`）。必填项：`J_AGENT_PROVIDER`（claude/openai）和 `J_AGENT_API_KEY`。可选：`J_AGENT_BASE_URL`（自定义 API 端点）、`J_AGENT_MAX_CONTEXT_TOKENS`（上下文窗口上限，默认 100000）、`J_AGENT_COMPRESS_RATIO`（压缩切割位置比例，默认 0.6）、`J_AGENT_SUMMARY_RATIO`（摘要最大长度占阈值比例，默认 0.1）。
 
 ## 架构
 
@@ -39,7 +39,16 @@ python -m pytest tests/test_tools.py::TestToolRegistry::test_execute_success -v 
 
 ### 事件驱动的 UI 解耦
 
-`Agent` 接受 `on_event` 回调，事件类型包括：`tool_call`、`tool_result`、`assistant_response`、`max_iterations`。CLI（`cli.py`）通过此回调渲染 rich 面板——agent 逻辑不依赖任何 UI。
+`Agent` 接受 `on_event` 回调，事件类型包括：`tool_call`、`tool_result`、`assistant_response`、`max_iterations`、`context_managed`。CLI（`cli.py`）通过此回调渲染 rich 面板——agent 逻辑不依赖任何 UI。
+
+### 记忆与上下文管理 (`src/memory/`)
+
+- **Token 计数**（`token_counter.py`）：`create_token_counter(provider, model)` 工厂创建计数器。优先使用 AutoTokenizer（中国主流模型 Qwen/GLM/DeepSeek/Baichuan/Yi，需 `pip install -e ".[chinese]"`），OpenAI 用 tiktoken 本地编码（加载失败回退启发式），Claude 用 chars/4 启发式。
+- **会话持久化**（`conversation.py`）：`Session` 类保存/加载对话到 `~/.j-agent/sessions/<id>.json`。CLI 支持 `/save`、`/load <id>`、`/sessions` 命令。
+- **上下文管理**（`context_manager.py`）：`ContextManager.manage(messages)` 原地修改消息列表。超过阈值时从 `compress_ratio`（默认 60%）位置找安全切割点（user 消息边界），对旧消息用 LLM 生成 `[对话摘要]` 摘要（prompt 限制输出长度）。配置校验确保 `(1-compress_ratio)*1.2 + summary_ratio ≤ 60%`。
+- **跨会话记忆**（`memory_store.py` + `tools/builtin/memory.py`）：`MemoryTool` 让 Agent 主动 save/read/list/delete 键值对，持久化到 `~/.j-agent/memory.json`。工具自动发现，无需手动注册。
+
+Agent 接受可选的 `context_manager` 参数，在每次调用 `provider.chat()` 前执行 `manage()`。
 
 ## 设计文档
 
@@ -48,7 +57,8 @@ python -m pytest tests/test_tools.py::TestToolRegistry::test_execute_success -v 
 - `docs/SDD.md` -- 总方案（架构、接口、路线图）
 - `docs/phase-1.md` -- Phase 1: MVP 核心 Agent Loop（已完成）
 - `docs/phase-2.md` -- Phase 2: 工具系统增强（已完成）
-- `docs/phase-3.md` ~ `docs/phase-6.md` -- Phase 3-6: 记忆/权限/规划/可观测性（待开发）
+- `docs/phase-3.md` -- Phase 3: 记忆与上下文管理（已完成）
+- `docs/phase-4.md` ~ `docs/phase-6.md` -- Phase 4-6: 权限/规划/可观测性（待开发）
 
 ## 约定
 

@@ -27,6 +27,9 @@ class Config:
     system_prompt: str
     max_tokens: int = 4096
     base_url: str | None = None  # None means use provider's default
+    max_context_tokens: int = 100_000
+    compress_ratio: float = 0.6
+    summary_ratio: float = 0.1
 
     @classmethod
     def from_env(cls) -> Config:
@@ -65,6 +68,10 @@ class Config:
 
         base_url = os.getenv("J_AGENT_BASE_URL") or None
 
+        max_context_tokens = int(os.getenv("J_AGENT_MAX_CONTEXT_TOKENS", "100000"))
+        compress_ratio = float(os.getenv("J_AGENT_COMPRESS_RATIO", "0.6"))
+        summary_ratio = float(os.getenv("J_AGENT_SUMMARY_RATIO", "0.1"))
+
         return cls(
             provider=provider,
             model=model,
@@ -72,6 +79,9 @@ class Config:
             system_prompt=system_prompt,
             max_tokens=max_tokens,
             base_url=base_url,
+            max_context_tokens=max_context_tokens,
+            compress_ratio=compress_ratio,
+            summary_ratio=summary_ratio,
         )
 
 

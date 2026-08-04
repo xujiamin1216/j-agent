@@ -2,7 +2,7 @@
 title: j-agent 软件设计文档 (SDD)
 version: 0.1.0
 date: 2026-08-03
-status: Phase 2 已实现
+status: Phase 3 已实现
 ---
 
 # j-agent 软件设计文档
@@ -136,7 +136,7 @@ j-agent 提供以下核心能力：
 | Bash Tool | `tools/builtin/bash.py` | Shell 命令执行（带超时） | 2 |
 | Glob Tool | `tools/builtin/glob.py` | 文件名 glob 匹配 | 2 |
 | Grep Tool | `tools/builtin/grep.py` | 文件内容正则搜索 | 2 |
-| Memory | `memory/` | 会话持久化、上下文窗口管理 | 3 |
+| Memory | `memory/` | 会话持久化、Token 计数、上下文管理、跨会话记忆 | 3 |
 | Permission | `permission/` | 风险分级、权限校验 | 4 |
 | Planning | `planning/` | 任务分解、计划跟踪 | 5 |
 | Observability | `observability/` | 追踪、日志、成本统计 | 6 |
@@ -210,6 +210,8 @@ j-agent 提供以下核心能力：
 | `J_AGENT_MODEL` | 否 | 按 provider 默认 | 模型标识符 |
 | `J_AGENT_SYSTEM_PROMPT` | 否 | 内置默认 | 系统提示词 |
 | `J_AGENT_MAX_TOKENS` | 否 | `4096` | 最大输出 token |
+| `J_AGENT_MAX_CONTEXT_TOKENS` | 否 | `100000` | 上下文窗口 token 上限 |
+| `J_AGENT_KEEP_RECENT_MESSAGES` | 否 | `10` | 截断/压缩时保留的最近消息数 |
 
 ### 4.2 接口设计
 
@@ -285,6 +287,7 @@ class Agent:
         provider: LLMProvider,
         tools: ToolRegistry | None = None,
         on_event: EventCallback | None = None,
+        context_manager: ContextManager | None = None,
     )
 
     def run(self, user_input: str) -> str
@@ -299,6 +302,7 @@ Agent 不负责创建 LLMProvider，而是接收外部创建好的实例。Provi
 | `tool_call` | `{name, arguments}` | 执行工具前 |
 | `tool_result` | `{name, content, is_error}` | 工具执行完成后 |
 | `assistant_response` | `{content}` | LLM 返回最终文本 |
+| `context_managed` | `{before_count, after_count}` | 上下文被截断或压缩 |
 | `max_iterations` | `{message}` | 达到最大迭代次数 |
 
 **安全机制**：
@@ -362,7 +366,7 @@ Agent.run(user_input)
 ```
 Phase 1 ████████████████████ 完成  MVP: Agent Loop + 工具框架 + 多模型
 Phase 2 ████████████████████ 完成  工具系统增强 (文件/shell/grep/校验/自动发现)
-Phase 3 ░░░░░░░░░░░░░░░░░░░░ 待开发  记忆与上下文管理
+Phase 3 ████████████████████ 完成  记忆与上下文管理
 Phase 4 ░░░░░░░░░░░░░░░░░░░░ 待开发  权限系统
 Phase 5 ░░░░░░░░░░░░░░░░░░░░ 待开发  规划与子 Agent
 Phase 6 ░░░░░░░░░░░░░░░░░░░░ 待开发  可观测性
@@ -374,7 +378,7 @@ Phase 6 ░░░░░░░░░░░░░░░░░░░░ 待开发  
 |------|------|------|
 | Phase 1: MVP - 核心 Agent Loop | 已完成 | [phase-1.md](phase-1.md) |
 | Phase 2: 工具系统增强 | 已完成 | [phase-2.md](phase-2.md) |
-| Phase 3: 记忆与上下文管理 | 待开发 | [phase-3.md](phase-3.md) |
+| Phase 3: 记忆与上下文管理 | 已完成 | [phase-3.md](phase-3.md) |
 | Phase 4: 权限系统 | 待开发 | [phase-4.md](phase-4.md) |
 | Phase 5: 规划与子 Agent | 待开发 | [phase-5.md](phase-5.md) |
 | Phase 6: 可观测性 | 待开发 | [phase-6.md](phase-6.md) |
@@ -393,7 +397,7 @@ Phase 6 ░░░░░░░░░░░░░░░░░░░░ 待开发  
 
 ### 6.2 测试总览
 
-当前共 73 个单元测试，各阶段测试明细见对应阶段文档。
+当前共 167 个单元测试，各阶段测试明细见对应阶段文档。
 
 ```bash
 # 运行全部测试
@@ -410,7 +414,8 @@ Phase 6 ░░░░░░░░░░░░░░░░░░░░ 待开发  
 | `openai` | >=1.50.0 | OpenAI API SDK | 1 |
 | `python-dotenv` | >=1.0.0 | .env 文件加载 | 1 |
 | `rich` | >=13.0.0 | 终端彩色输出 | 1 |
-| `tiktoken` | - | OpenAI token 计数 | 3 |
+| `tiktoken` | >=0.7.0 | OpenAI token 计数 | 3 |
+| `transformers` | >=4.40.0 | 中国主流模型 token 计数 (AutoTokenizer) | 3 (optional) |
 | `pytest` | >=8.0.0 | 测试框架 | 1 (dev) |
 | `pytest-asyncio` | >=0.24.0 | 异步测试支持 | 1 (dev) |
 
@@ -458,8 +463,14 @@ j-agent/
 │   │       ├── file_edit.py    # FileEditTool
 │   │       ├── bash.py         # BashTool
 │   │       ├── glob.py         # GlobTool
-│   │       └── grep.py         # GrepTool
-│   ├── memory/                 # Phase 3
+│   │       ├── grep.py         # GrepTool
+│   │       └── memory.py       # MemoryTool
+│   ├── memory/
+│   │   ├── __init__.py
+│   │   ├── conversation.py        # Session 持久化
+│   │   ├── token_counter.py       # Token 计数 (tiktoken / 启发式)
+│   │   ├── context_manager.py     # 上下文截断 + 压缩
+│   │   └── memory_store.py        # 跨会话键值存储
 │   ├── permission/             # Phase 4
 │   ├── planning/               # Phase 5
 │   └── observability/          # Phase 6
@@ -474,5 +485,10 @@ j-agent/
     ├── test_bash.py
     ├── test_glob.py
     ├── test_grep.py
-    └── test_discovery.py
+    ├── test_discovery.py
+    ├── test_token_counter.py
+    ├── test_conversation.py
+    ├── test_context_manager.py
+    ├── test_memory_store.py
+    └── test_memory_tool.py
 ```

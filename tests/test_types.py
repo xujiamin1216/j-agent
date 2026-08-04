@@ -47,6 +47,68 @@ class TestMessage:
         assert d["tool_calls"][0]["name"] == "echo"
 
 
+class TestMessageFromDict:
+    def test_from_dict_user(self):
+        original = Message.user("hello")
+        restored = Message.from_dict(original.to_dict())
+        assert restored.role == "user"
+        assert restored.content == "hello"
+        assert restored.tool_calls == []
+        assert restored.tool_call_id is None
+
+    def test_from_dict_assistant_with_tool_calls(self):
+        tc = ToolCall(id="tc1", name="echo", arguments={"text": "hi"})
+        original = Message.assistant(content="thinking...", tool_calls=[tc])
+        restored = Message.from_dict(original.to_dict())
+        assert restored.role == "assistant"
+        assert restored.content == "thinking..."
+        assert len(restored.tool_calls) == 1
+        assert restored.tool_calls[0].id == "tc1"
+        assert restored.tool_calls[0].name == "echo"
+        assert restored.tool_calls[0].arguments == {"text": "hi"}
+
+    def test_from_dict_assistant_empty(self):
+        original = Message.assistant()
+        restored = Message.from_dict(original.to_dict())
+        assert restored.role == "assistant"
+        assert restored.content == ""
+        assert restored.tool_calls == []
+
+    def test_from_dict_tool(self):
+        original = Message.tool("tc1", "result text")
+        restored = Message.from_dict(original.to_dict())
+        assert restored.role == "tool"
+        assert restored.content == "result text"
+        assert restored.tool_call_id == "tc1"
+
+    def test_from_dict_tool_error_preserved(self):
+        original = Message.tool("tc1", "something failed", is_error=True)
+        restored = Message.from_dict(original.to_dict())
+        assert restored.content.startswith("[ERROR]")
+
+    def test_from_dict_missing_optional_fields(self):
+        d = {"role": "user", "content": "hi"}
+        restored = Message.from_dict(d)
+        assert restored.role == "user"
+        assert restored.content == "hi"
+        assert restored.tool_calls == []
+        assert restored.tool_call_id is None
+
+    def test_round_trip_all_types(self):
+        messages = [
+            Message.user("hello"),
+            Message.assistant("hi", [ToolCall(id="tc1", name="echo", arguments={"x": 1})]),
+            Message.tool("tc1", "result"),
+            Message.assistant("done"),
+        ]
+        for msg in messages:
+            restored = Message.from_dict(msg.to_dict())
+            assert restored.role == msg.role
+            assert restored.content == msg.content
+            assert len(restored.tool_calls) == len(msg.tool_calls)
+            assert restored.tool_call_id == msg.tool_call_id
+
+
 class TestToolSpec:
     def test_to_dict(self):
         spec = ToolSpec(

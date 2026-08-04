@@ -11,12 +11,15 @@ calls, up to a maximum iteration limit to prevent runaway loops.
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from src.config import Config
 from src.llm.base import LLMProvider
 from src.llm.types import Message, ToolResult
 from src.tools.base import ToolRegistry
+
+if TYPE_CHECKING:
+    from src.memory.context_manager import ContextManager
 
 # Maximum consecutive LLM calls for a single user turn. Prevents infinite
 # tool-call loops if the LLM keeps requesting tools without finishing.
@@ -35,12 +38,14 @@ class Agent:
         provider: LLMProvider,
         tools: ToolRegistry | None = None,
         on_event: EventCallback | None = None,
+        context_manager: ContextManager | None = None,
     ) -> None:
         self._config = config
         self._provider = provider
         self._tools = tools or ToolRegistry()
         self._messages: list[Message] = []
         self._on_event = on_event or _noop_callback
+        self._context_manager = context_manager
 
     @property
     def tools(self) -> ToolRegistry:
@@ -62,6 +67,12 @@ class Agent:
         tool_specs = self._tools.to_specs() or None
 
         for iteration in range(MAX_ITERATIONS):
+            # Manage context window before each LLM call.
+            if self._context_manager:
+                info = self._context_manager.manage(self._messages)
+                if info:
+                    self._on_event("context_managed", info)
+
             response = self._provider.chat(
                 messages=self._messages,
                 tools=tool_specs,

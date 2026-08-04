@@ -60,6 +60,20 @@ class Message:
         return d
 
     @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> Message:
+        """Deserialize from a plain dict (inverse of to_dict)."""
+        tool_calls = [
+            ToolCall(id=tc["id"], name=tc["name"], arguments=tc["arguments"])
+            for tc in d.get("tool_calls", [])
+        ]
+        return cls(
+            role=d["role"],
+            content=d.get("content", ""),
+            tool_calls=tool_calls,
+            tool_call_id=d.get("tool_call_id"),
+        )
+
+    @classmethod
     def user(cls, content: str) -> Message:
         return cls(role="user", content=content)
 
