@@ -48,7 +48,7 @@ class FileReadTool(Tool):
         limit: int | None = None,
         **kwargs: Any,
     ) -> str:
-        p = Path(path)
+        p = self._resolve_path(path)
 
         if not p.exists():
             raise FileNotFoundError(f"文件不存在: {path}")

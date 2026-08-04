@@ -46,7 +46,7 @@ class GlobTool(Tool):
         path: str | None = None,
         **kwargs: Any,
     ) -> str:
-        base = Path(path or ".")
+        base = self._resolve_path(path)
         if not base.exists():
             raise FileNotFoundError(f"路径不存在: {path}")
 

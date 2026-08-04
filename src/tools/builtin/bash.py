@@ -48,6 +48,7 @@ class BashTool(Tool):
         **kwargs: Any,
     ) -> str:
         time_limit = timeout or 30
+        resolved_cwd = str(self._resolve_path(cwd)) if self.work_dir else cwd
 
         try:
             proc = subprocess.run(
@@ -56,7 +57,7 @@ class BashTool(Tool):
                 capture_output=True,
                 text=True,
                 timeout=time_limit,
-                cwd=cwd,
+                cwd=resolved_cwd,
             )
         except subprocess.TimeoutExpired:
             return (

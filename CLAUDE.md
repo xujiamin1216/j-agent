@@ -17,7 +17,12 @@ python -m pytest tests/ -v
 python -m pytest tests/test_tools.py::TestToolRegistry::test_execute_success -v  # 单个测试
 ```
 
-配置通过 `.env` 文件进行（参见 `.env.example`）。必填项：`J_AGENT_PROVIDER`（claude/openai）和 `J_AGENT_API_KEY`。可选：`J_AGENT_BASE_URL`（自定义 API 端点）、`J_AGENT_MAX_CONTEXT_TOKENS`（上下文窗口上限，默认 100000）、`J_AGENT_COMPRESS_RATIO`（压缩切割位置比例，默认 0.6）、`J_AGENT_SUMMARY_RATIO`（摘要最大长度占阈值比例，默认 0.1）。
+配置通过 `.env` 文件进行（参见 `.env.example`）。必填项：`J_AGENT_PROVIDER`（claude/openai）和 `J_AGENT_API_KEY`。可选：`J_AGENT_BASE_URL`（自定义 API 端点）、`J_AGENT_MAX_CONTEXT_TOKENS`（上下文窗口上限，默认 100000）、`J_AGENT_COMPRESS_RATIO`（压缩切割位置比例，默认 0.6）、`J_AGENT_SUMMARY_RATIO`（摘要最大长度占阈值比例，默认 0.1）。工作目录下可放置 `.j-agent.env` 覆盖全局配置（优先级最高）。
+
+**工作上下文绑定**（`src/work_context.py`）：Agent 启动时绑定当前工作目录，提供三项能力：
+- **AGENT.md**：自动从工作目录加载 `AGENT.md`，内容追加到系统提示词，用于存放工作背景、编码约定、常用命令等指令。
+- **工具工作目录**：`Tool` 基类的 `_resolve_path()` 将相对路径基于工作目录解析，绝对路径不受影响。`ToolRegistry` 在注册时自动设置 `work_dir`。
+- **记忆/会话隔离**：`MemoryTool` 和 `Session` 的数据持久化到工作目录下的 `.j-agent/`（如 `.j-agent/memory.json`、`.j-agent/sessions/`），不同工作目录互不干扰。
 
 ## 架构
 
@@ -44,9 +49,9 @@ python -m pytest tests/test_tools.py::TestToolRegistry::test_execute_success -v 
 ### 记忆与上下文管理 (`src/memory/`)
 
 - **Token 计数**（`token_counter.py`）：`create_token_counter(provider, model)` 工厂创建计数器。优先使用 AutoTokenizer（中国主流模型 Qwen/GLM/DeepSeek/Baichuan/Yi，需 `pip install -e ".[chinese]"`），OpenAI 用 tiktoken 本地编码（加载失败回退启发式），Claude 用 chars/4 启发式。
-- **会话持久化**（`conversation.py`）：`Session` 类保存/加载对话到 `~/.j-agent/sessions/<id>.json`。CLI 支持 `/save`、`/load <id>`、`/sessions` 命令。
+- **会话持久化**（`conversation.py`）：`Session` 类保存/加载对话到工作目录下 `.j-agent/sessions/<id>.json`。CLI 支持 `/save`、`/load <id>`、`/sessions` 命令。
 - **上下文管理**（`context_manager.py`）：`ContextManager.manage(messages)` 原地修改消息列表。超过阈值时从 `compress_ratio`（默认 60%）位置找安全切割点（user 消息边界），对旧消息用 LLM 生成 `[对话摘要]` 摘要（prompt 限制输出长度）。配置校验确保 `(1-compress_ratio)*1.2 + summary_ratio ≤ 60%`。
-- **跨会话记忆**（`memory_store.py` + `tools/builtin/memory.py`）：`MemoryTool` 让 Agent 主动 save/read/list/delete 键值对，持久化到 `~/.j-agent/memory.json`。工具自动发现，无需手动注册。
+- **跨会话记忆**（`memory_store.py` + `tools/builtin/memory.py`）：`MemoryTool` 让 Agent 主动 save/read/list/delete 键值对，持久化到工作目录下 `.j-agent/memory.json`。工具自动发现，无需手动注册。
 
 Agent 接受可选的 `context_manager` 参数，在每次调用 `provider.chat()` 前执行 `manage()`。
 

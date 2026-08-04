@@ -59,3 +59,27 @@ class TestFileReadTool:
         tool = FileReadTool()
         result = tool.execute(path=str(f), offset=999)
         assert "超出范围" in result
+
+
+class TestFileReadWorkDir:
+    def test_relative_path_resolved_against_work_dir(self, tmp_path):
+        work_dir = tmp_path / "project"
+        work_dir.mkdir()
+        f = work_dir / "test.txt"
+        f.write_text("hello work dir\n", encoding="utf-8")
+
+        tool = FileReadTool()
+        tool.work_dir = work_dir
+        result = tool.execute(path="test.txt")
+        assert "hello work dir" in result
+
+    def test_absolute_path_unaffected_by_work_dir(self, tmp_path):
+        work_dir = tmp_path / "project"
+        work_dir.mkdir()
+        outside = tmp_path / "outside.txt"
+        outside.write_text("outside file\n", encoding="utf-8")
+
+        tool = FileReadTool()
+        tool.work_dir = work_dir
+        result = tool.execute(path=str(outside))
+        assert "outside file" in result

@@ -1,8 +1,10 @@
 """Tests for MemoryTool."""
 
+from pathlib import Path
+
 import pytest
 
-from src.tools.base import Tool
+from src.tools.base import Tool, ToolRegistry
 from src.tools.builtin.memory import MemoryTool
 from src.tools.discovery import discover_builtin_tools
 
@@ -89,3 +91,48 @@ class TestMemoryToolDiscovery:
         assert "key" in spec.parameters["properties"]
         assert "value" in spec.parameters["properties"]
         assert spec.parameters["required"] == ["action"]
+
+
+class TestMemoryToolWorkDir:
+    def test_work_dir_isolates_memory(self, tmp_path: Path):
+        """MemoryTool with work_dir stores data in <work_dir>/.j-agent/memory.json."""
+        work_dir = tmp_path / "project"
+        work_dir.mkdir()
+
+        tool = MemoryTool()
+        tool.work_dir = work_dir
+
+        tool.execute(action="save", key="key1", value="value1")
+
+        memory_file = work_dir / ".j-agent" / "memory.json"
+        assert memory_file.exists()
+        assert "key1" in memory_file.read_text(encoding="utf-8")
+
+    def test_different_work_dirs_isolated(self, tmp_path: Path):
+        """Two MemoryTools with different work_dirs have separate storage."""
+        dir_a = tmp_path / "project-a"
+        dir_b = tmp_path / "project-b"
+        dir_a.mkdir()
+        dir_b.mkdir()
+
+        tool_a = MemoryTool()
+        tool_a.work_dir = dir_a
+        tool_b = MemoryTool()
+        tool_b.work_dir = dir_b
+
+        tool_a.execute(action="save", key="key", value="from-a")
+        tool_b.execute(action="save", key="key", value="from-b")
+
+        assert tool_a.execute(action="read", key="key") == "from-a"
+        assert tool_b.execute(action="read", key="key") == "from-b"
+
+    def test_registry_sets_work_dir(self, tmp_path: Path):
+        """ToolRegistry sets work_dir on registered tools."""
+        work_dir = tmp_path / "project"
+        work_dir.mkdir()
+
+        registry = ToolRegistry(work_dir=work_dir)
+        tool = MemoryTool()
+        registry.register(tool)
+
+        assert tool.work_dir == work_dir

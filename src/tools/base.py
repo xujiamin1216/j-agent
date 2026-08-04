@@ -8,6 +8,7 @@ world -- they are the "hands" of the agent.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any
 
 from src.llm.types import ToolResult, ToolSpec
@@ -35,6 +36,21 @@ class Tool(ABC):
         "additionalProperties": False,
     }
 
+    # Working directory for path resolution. Set by ToolRegistry.
+    work_dir: Path | None = None
+
+    def _resolve_path(self, path: str | None = None) -> Path:
+        """Resolve a path relative to the working directory.
+
+        Absolute paths are returned as-is. If *path* is None, the
+        working directory itself is returned.
+        """
+        base = self.work_dir or Path.cwd()
+        if path is None:
+            return base
+        p = Path(path)
+        return p if p.is_absolute() else base / p
+
     @abstractmethod
     def execute(self, **kwargs: Any) -> str:
         """Run the tool with validated arguments. Returns output as a string."""
@@ -52,13 +68,16 @@ class Tool(ABC):
 class ToolRegistry:
     """Manages tool registration, lookup, and execution."""
 
-    def __init__(self) -> None:
+    def __init__(self, work_dir: Path | None = None) -> None:
         self._tools: dict[str, Tool] = {}
+        self._work_dir = work_dir
 
     def register(self, tool: Tool) -> None:
         """Register a tool. Raises ValueError if name is already taken."""
         if tool.name in self._tools:
             raise ValueError(f"Tool '{tool.name}' is already registered")
+        if self._work_dir is not None:
+            tool.work_dir = self._work_dir
         self._tools[tool.name] = tool
 
     def get(self, name: str) -> Tool | None:

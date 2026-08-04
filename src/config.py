@@ -13,8 +13,24 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# Load .env from the current working directory if it exists.
-load_dotenv()
+# File name for project-specific context loaded into the system prompt.
+CONTEXT_FILE = "AGENT.md"
+
+# File name for project-specific environment variable overrides.
+CONFIG_FILE = ".j-agent.env"
+
+
+def load_work_context() -> str:
+    """Load work context from ``AGENT.md`` in the current working directory.
+
+    Returns the file content as a string, or an empty string if the file
+    does not exist or is empty.
+    """
+    path = Path.cwd() / CONTEXT_FILE
+    if not path.exists():
+        return ""
+    text = path.read_text(encoding="utf-8").strip()
+    return text
 
 
 @dataclass
@@ -35,6 +51,9 @@ class Config:
     def from_env(cls) -> Config:
         """Build a Config from environment variables.
 
+        Loads ``.env`` and ``.j-agent.env`` (with override) from the
+        current working directory before reading environment variables.
+
         Required env vars:
             J_AGENT_PROVIDER: "claude" or "openai"
             J_AGENT_API_KEY: API key for the chosen provider
@@ -43,6 +62,11 @@ class Config:
         For convenience, if J_AGENT_MODEL is not set, a sensible default
         for the chosen provider is used.
         """
+        # Load .env from the current working directory if it exists.
+        load_dotenv()
+        # Load .j-agent.env, overriding .env values (project-specific precedence).
+        load_dotenv(CONFIG_FILE, override=True)
+
         provider = os.getenv("J_AGENT_PROVIDER", "claude").lower()
 
         defaults = {
@@ -63,6 +87,14 @@ class Config:
             "J_AGENT_SYSTEM_PROMPT",
             "You are a helpful AI assistant. Use tools when appropriate to help the user.",
         )
+
+        # Append work context from AGENT.md if available.
+        work_context = load_work_context()
+        if work_context:
+            system_prompt = (
+                f"{system_prompt}\n\n---\n\n"
+                f"# 工作上下文 ({CONTEXT_FILE})\n\n{work_context}"
+            )
 
         max_tokens = int(os.getenv("J_AGENT_MAX_TOKENS", "4096"))
 

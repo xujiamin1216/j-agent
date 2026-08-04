@@ -46,7 +46,7 @@ class FileWriteTool(Tool):
         append: bool = False,
         **kwargs: Any,
     ) -> str:
-        p = Path(path)
+        p = self._resolve_path(path)
 
         # Create parent directories if they don't exist.
         p.parent.mkdir(parents=True, exist_ok=True)

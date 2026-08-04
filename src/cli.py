@@ -11,19 +11,21 @@ Commands:
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
 
 from src.agent import Agent
-from src.config import Config
+from src.config import CONTEXT_FILE, Config, load_work_context
 from src.llm.factory import create_provider
 from src.memory.context_manager import ContextManager, ContextManagerConfig
 from src.memory.conversation import Session
 from src.memory.token_counter import create_token_counter
 from src.tools.base import ToolRegistry
 from src.tools.discovery import discover_builtin_tools
+from src.work_context import WorkContext
 
 BANNER = r"""
        _              _
@@ -37,19 +39,20 @@ BANNER = r"""
 """
 
 
-def build_tools() -> ToolRegistry:
+def build_tools(work_dir: Path | None = None) -> ToolRegistry:
     """Create the tool registry with all built-in tools auto-discovered."""
-    registry = ToolRegistry()
+    registry = ToolRegistry(work_dir=work_dir)
     for tool in discover_builtin_tools():
         registry.register(tool)
     return registry
 
 
-def create_agent(config: Config | None = None) -> Agent:
+def create_agent(config: Config | None = None, ctx: WorkContext | None = None) -> Agent:
     """Create an agent with default config and tools."""
     cfg = config or Config.from_env()
     provider = create_provider(cfg)
-    tools = build_tools()
+    work_dir = ctx.work_dir if ctx else None
+    tools = build_tools(work_dir=work_dir)
     console = Console()
 
     # Create context manager for context window management.
@@ -124,14 +127,21 @@ def main() -> None:
         )
         sys.exit(1)
 
-    agent = create_agent(config)
+    ctx = WorkContext.from_cwd()
+    agent = create_agent(config, ctx)
 
     console.print(BANNER, style="bold cyan")
     console.print(
         f"  Provider: [bold]{config.provider}[/]  "
         f"Model: [bold]{config.model}[/]\n"
+        f"  Work dir: [bold]{ctx.work_dir}[/]\n"
         f"  Tools: {', '.join(agent.tools.names())}\n"
-        f"  Type [bold]/help[/] for commands, [bold]/exit[/] to quit.\n"
+        + (
+            f"  Context: [bold]{CONTEXT_FILE}[/] loaded\n"
+            if load_work_context()
+            else ""
+        )
+        + f"  Type [bold]/help[/] for commands, [bold]/exit[/] to quit.\n"
     )
 
     while True:
@@ -147,7 +157,7 @@ def main() -> None:
 
         # Handle slash commands.
         if user_input.startswith("/"):
-            if _handle_command(user_input, agent, console):
+            if _handle_command(user_input, agent, console, ctx.sessions_dir):
                 break
             continue
 
@@ -165,7 +175,9 @@ def main() -> None:
             console.print(f"[bold red]Error:[/] {type(e).__name__}: {e}")
 
 
-def _handle_command(command: str, agent: Agent, console: Console) -> bool:
+def _handle_command(
+    command: str, agent: Agent, console: Console, sessions_dir: Path | None = None
+) -> bool:
     """Handle a slash command. Returns True if the agent should exit."""
     cmd = command.lower()
     parts = command.split(maxsplit=1)
@@ -204,7 +216,7 @@ def _handle_command(command: str, agent: Agent, console: Console) -> bool:
         return False
 
     if cmd == "/sessions":
-        sessions = Session.list_sessions()
+        sessions = Session.list_sessions(sessions_dir=sessions_dir)
         if not sessions:
             console.print("[dim]No saved sessions.[/]")
             return False
@@ -226,14 +238,14 @@ def _handle_command(command: str, agent: Agent, console: Console) -> bool:
 
     if cmd == "/save":
         session = Session.from_messages(agent.messages)
-        path = session.save()
+        path = session.save(sessions_dir=sessions_dir)
         console.print(f"[dim]Session saved: {session.id}[/]")
         return False
 
     if parts[0].lower() == "/load" and len(parts) > 1:
         session_id = parts[1].strip()
         try:
-            session = Session.load(session_id)
+            session = Session.load(session_id, sessions_dir=sessions_dir)
         except FileNotFoundError as e:
             console.print(f"[bold red]Error:[/] {e}")
             return False

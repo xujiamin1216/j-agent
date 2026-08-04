@@ -213,6 +213,12 @@ j-agent 提供以下核心能力：
 | `J_AGENT_MAX_CONTEXT_TOKENS` | 否 | `100000` | 上下文窗口 token 上限 |
 | `J_AGENT_KEEP_RECENT_MESSAGES` | 否 | `10` | 截断/压缩时保留的最近消息数 |
 
+**工作上下文绑定**（`src/work_context.py`）：Agent 启动时绑定当前工作目录，提供：
+- **AGENT.md**：自动从工作目录加载，内容追加到系统提示词。文件不存在或为空时忽略。
+- **工具工作目录**：文件/shell 工具的相对路径基于工作目录解析（`Tool._resolve_path()`），绝对路径不受影响。
+- **记忆/会话隔离**：`MemoryTool` 和 `Session` 的数据持久化到 `<work_dir>/.j-agent/`（如 `memory.json`、`sessions/`），不同工作目录互不干扰。
+- **配置覆盖**：工作目录下 `.j-agent.env` 覆盖 `.env` 配置（优先级最高）。
+
 ### 4.2 接口设计
 
 #### 4.2.1 LLMProvider 接口 (`llm/base.py`)
@@ -444,6 +450,7 @@ j-agent/
 │   ├── agent.py                # 核心 Agent Loop
 │   ├── cli.py                  # CLI REPL
 │   ├── config.py               # 配置管理
+│   ├── work_context.py         # 工作上下文绑定
 │   ├── llm/
 │   │   ├── __init__.py
 │   │   ├── base.py             # LLMProvider 抽象基类
