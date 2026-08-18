@@ -79,6 +79,17 @@ Skills 是用户定义的 prompt 模板，LLM 根据自然语言触发条件自�
 - **Agent 集成**：`Agent` 接受可选 `permission_manager`，执行工具前调用 `check()`，拒绝时触发 `permission_denied` 事件并返回 `is_error` 结果（`[权限拒绝] ...`）。
 - **CLI 命令**：`/permission` 显示当前模式，`/permission <mode>` 切换；配置项 `J_AGENT_PERMISSION_MODE`。
 
+### 规划与子 Agent (`src/planning/`)
+
+处理复杂的多步骤任务：用任务列表拆解跟踪工作，并用子 Agent 派生隔离的上下文并行执行子任务。
+
+- **计划数据**（`planning/plan.py`）：`Task`（id/title/status/description，status 为 `pending`/`in_progress`/`completed`）与 `Plan`（add_task/get_task/update_task/list_tasks/to_dict/from_dict）。`Plan.replace(other)` 原地替换 tasks 列表，保持对象身份，供会话恢复时 PlanTool 引用仍有效。
+- **子 Agent 运行器**（`planning/subagent.py`）：`SubAgentRunner.run(task)` 串行、`run_parallel(tasks)` 用 `ThreadPoolExecutor` 并发；每个子 Agent 拥有独立 `ToolRegistry` 和消息历史（`tools_factory` 构建，排除 `spawn_agent` 防止无界嵌套）。
+- **PlanTool**（`tools/builtin/plan.py`）：`action` 支持 `create`/`update`/`list`/`get`，风险级别 `safe`。
+- **SpawnAgentTool**（`tools/builtin/spawn.py`）：`task`（单任务）或 `tasks`（并行多任务），风险级别 `confirm`；`runner` 由 CLI 注入。
+- **会话持久化**：`Session.plan` 字段保存/加载计划；`/save` 保存 `agent.plan`，`/load` 通过 `agent.plan.replace(session.plan)` 恢复。
+- **CLI 命令**：`/plan` 查看当前任务计划。
+
 ## 设计文档
 
 总方案 SDD 位于 `docs/SDD.md`，各阶段详细设计拆分为独立文档：
@@ -89,7 +100,8 @@ Skills 是用户定义的 prompt 模板，LLM 根据自然语言触发条件自�
 - `docs/phase-3.md` -- Phase 3: 记忆与上下文管理（已完成）
 - `docs/phase-skills.md` -- Skills: Skill prompt 模板与自然语言触发（已完成）
 - `docs/phase-4.md` -- Phase 4: 权限系统（已完成）
-- `docs/phase-5.md` ~ `docs/phase-6.md` -- Phase 5-6: 规划/可观测性（待开发）
+- `docs/phase-5.md` -- Phase 5: 规划与子 Agent（已完成）
+- `docs/phase-6.md` -- Phase 6: 可观测性（待开发）
 
 ## 约定
 

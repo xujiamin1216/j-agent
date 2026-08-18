@@ -25,8 +25,12 @@ from src.memory.conversation import Session
 from src.memory.token_counter import create_token_counter
 from src.permission.manager import PermissionManager, PermissionMode
 from src.permission.risk import RiskLevel
+from src.planning.plan import Plan
+from src.planning.subagent import SubAgentRunner
 from src.skills.discovery import discover_skills
 from src.tools.base import ToolRegistry
+from src.tools.builtin.plan import PlanTool
+from src.tools.builtin.spawn import SpawnAgentTool
 from src.tools.discovery import discover_builtin_tools
 from src.work_context import WorkContext
 
@@ -42,12 +46,42 @@ BANNER = r"""
 """
 
 
-def build_tools(work_dir: Path | None = None) -> ToolRegistry:
-    """Create the tool registry with all built-in tools auto-discovered."""
+def build_tools(
+    work_dir: Path | None = None,
+    plan: Plan | None = None,
+    runner: SubAgentRunner | None = None,
+) -> ToolRegistry:
+    """Create the tool registry with all built-in tools auto-discovered.
+
+    Optionally injects a shared ``Plan`` into the PlanTool and a
+    ``SubAgentRunner`` into the SpawnAgentTool.
+    """
     registry = ToolRegistry(work_dir=work_dir)
     for tool in discover_builtin_tools():
+        if isinstance(tool, PlanTool) and plan is not None:
+            tool.plan = plan
+        if isinstance(tool, SpawnAgentTool) and runner is not None:
+            tool.runner = runner
         registry.register(tool)
     return registry
+
+
+def _subagent_tools_factory(work_dir: Path | None):
+    """Return a factory that builds a tool set for sub-agents.
+
+    Sub-agents get all built-in tools except ``spawn_agent`` to prevent
+    unbounded nested spawning.
+    """
+
+    def factory() -> ToolRegistry:
+        registry = ToolRegistry(work_dir=work_dir)
+        for tool in discover_builtin_tools():
+            if isinstance(tool, SpawnAgentTool):
+                continue
+            registry.register(tool)
+        return registry
+
+    return factory
 
 
 def create_agent(config: Config | None = None, ctx: WorkContext | None = None) -> Agent:
@@ -55,7 +89,8 @@ def create_agent(config: Config | None = None, ctx: WorkContext | None = None) -
     cfg = config or Config.from_env()
     provider = create_provider(cfg)
     work_dir = ctx.work_dir if ctx else None
-    tools = build_tools(work_dir=work_dir)
+    plan = Plan()
+    tools = build_tools(work_dir=work_dir, plan=plan)
     console = Console()
 
     # Create context manager for context window management.
@@ -73,6 +108,18 @@ def create_agent(config: Config | None = None, ctx: WorkContext | None = None) -
         risk_map=tools.risk_levels(),
         ask_callback=_ask_permission(console),
     )
+
+    # Create the sub-agent runner and inject it into the spawn tool.
+    runner = SubAgentRunner(
+        provider=provider,
+        config=cfg,
+        tools_factory=_subagent_tools_factory(work_dir),
+        permission_manager=permission_manager,
+    )
+    for tool_name in tools.names():
+        tool = tools.get(tool_name)
+        if isinstance(tool, SpawnAgentTool):
+            tool.runner = runner
 
     def on_event(event: str, data: dict) -> None:
         if event == "tool_call":
@@ -254,6 +301,7 @@ def _handle_command(
                 "[bold]/help[/]      Show this help\n"
                 "[bold]/tools[/]     List registered tools\n"
                 "[bold]/skills[/]    List available skills\n"
+                "[bold]/plan[/]      View current task plan\n"
                 "[bold]/permission[/] [mode]  Show or set permission mode (auto/ask/yolo)\n"
                 "[bold]/sessions[/]  List saved sessions\n"
                 "[bold]/save[/]      Save current conversation\n"
@@ -274,6 +322,21 @@ def _handle_command(
             Panel(
                 "\n".join(lines) or "  No tools registered.",
                 title=f"Registered Tools ({len(specs)})",
+                border_style="cyan",
+            )
+        )
+        return False
+
+    if cmd == "/plan":
+        tasks = agent.plan.list_tasks()
+        if not tasks:
+            console.print("[dim]暂无任务。[/]")
+            return False
+        lines = [f"  [[bold]{t.status}[/]] [{t.id}] {t.title}" for t in tasks]
+        console.print(
+            Panel(
+                "\n".join(lines),
+                title=f"Plan Tasks ({len(tasks)})",
                 border_style="cyan",
             )
         )
@@ -339,7 +402,7 @@ def _handle_command(
         return False
 
     if cmd == "/save":
-        session = Session.from_messages(agent.messages)
+        session = Session.from_messages(agent.messages, plan=agent.plan)
         path = session.save(sessions_dir=sessions_dir)
         console.print(f"[dim]Session saved: {session.id}[/]")
         return False
@@ -352,6 +415,8 @@ def _handle_command(
             console.print(f"[bold red]Error:[/] {e}")
             return False
         agent._messages = session.messages
+        if session.plan is not None:
+            agent.plan.replace(session.plan)
         console.print(
             f"[dim]Loaded session {session.id} "
             f"({len(session.messages)} messages)[/]"

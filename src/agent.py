@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Callable
 from src.config import Config
 from src.llm.base import LLMProvider
 from src.llm.types import Message, ToolCall, ToolResult
+from src.planning.plan import Plan
 from src.tools.base import ToolRegistry
 
 if TYPE_CHECKING:
@@ -41,6 +42,7 @@ class Agent:
         on_event: EventCallback | None = None,
         context_manager: ContextManager | None = None,
         permission_manager: PermissionManager | None = None,
+        plan: Plan | None = None,
     ) -> None:
         self._config = config
         self._provider = provider
@@ -49,6 +51,7 @@ class Agent:
         self._on_event = on_event or _noop_callback
         self._context_manager = context_manager
         self._permission_manager = permission_manager
+        self._plan = plan or Plan()
 
     @property
     def tools(self) -> ToolRegistry:
@@ -61,6 +64,10 @@ class Agent:
     @property
     def permission_manager(self) -> PermissionManager | None:
         return self._permission_manager
+
+    @property
+    def plan(self) -> Plan:
+        return self._plan
 
     def run(self, user_input: str) -> str:
         """Process one user turn and return the assistant's text response.

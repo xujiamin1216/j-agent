@@ -8,7 +8,7 @@ class TestDiscovery:
     def test_discovers_all_builtin_tools(self):
         tools = discover_builtin_tools()
         names = {t.name for t in tools}
-        # All eight built-in tools should be discovered.
+        # All ten built-in tools should be discovered.
         assert names == {
             "file_read",
             "file_write",
@@ -18,6 +18,8 @@ class TestDiscovery:
             "grep",
             "memory",
             "use_skill",
+            "plan",
+            "spawn_agent",
         }
 
     def test_all_discovered_are_tool_instances(self):

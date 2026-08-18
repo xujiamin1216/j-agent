@@ -270,10 +270,10 @@ class TestToolRiskLevels:
     def test_builtin_tool_risk_levels(self):
         tools = {t.name: t for t in discover_builtin_tools()}
         # Read-only / scoped tools are safe.
-        for name in ("file_read", "glob", "grep", "memory"):
+        for name in ("file_read", "glob", "grep", "memory", "plan"):
             assert tools[name].risk_level == RiskLevel.SAFE
         # State-mutating / code-executing tools require confirmation.
-        for name in ("file_write", "file_edit", "bash", "use_skill"):
+        for name in ("file_write", "file_edit", "bash", "use_skill", "spawn_agent"):
             assert tools[name].risk_level == RiskLevel.CONFIRM
 
     def test_default_risk_level_is_safe(self):

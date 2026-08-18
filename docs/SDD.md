@@ -2,7 +2,7 @@
 title: j-agent 软件设计文档 (SDD)
 version: 0.1.0
 date: 2026-08-03
-status: Phase 4 已实现
+status: Phase 5 已实现
 ---
 
 # j-agent 软件设计文档
@@ -140,7 +140,7 @@ j-agent 提供以下核心能力：
 | Skills | `skills/` | Skill prompt 模板、渐进式加载、自然语言触发 | Skills |
 | UseSkillTool | `tools/builtin/skill.py` | LLM 调用以激活 Skill | Skills |
 | Permission | `permission/` | 风险分级、权限模式、危险操作检测 | 4 |
-| Planning | `planning/` | 任务分解、计划跟踪 | 5 |
+| Planning | `planning/` | 任务分解、计划跟踪、子 Agent 派生 | 5 |
 | Observability | `observability/` | 追踪、日志、成本统计 | 6 |
 
 ---
@@ -377,7 +377,7 @@ Phase 1 ████████████████████ 完成  MVP
 Phase 2 ████████████████████ 完成  工具系统增强 (文件/shell/grep/校验/自动发现)
 Phase 3 ████████████████████ 完成  记忆与上下文管理
 Phase 4 ████████████████████ 完成  权限系统
-Phase 5 ░░░░░░░░░░░░░░░░░░░░ 待开发  规划与子 Agent
+Phase 5 ████████████████████ 完成  规划与子 Agent
 Phase 6 ░░░░░░░░░░░░░░░░░░░░ 待开发  可观测性
 ```
 
@@ -390,7 +390,7 @@ Phase 6 ░░░░░░░░░░░░░░░░░░░░ 待开发  
 | Phase 3: 记忆与上下文管理 | 已完成 | [phase-3.md](phase-3.md) |
 | Skills: Skill prompt 模板 | 已完成 | [phase-skills.md](phase-skills.md) |
 | Phase 4: 权限系统 | 已完成 | [phase-4.md](phase-4.md) |
-| Phase 5: 规划与子 Agent | 待开发 | [phase-5.md](phase-5.md) |
+| Phase 5: 规划与子 Agent | 已完成 | [phase-5.md](phase-5.md) |
 | Phase 6: 可观测性 | 待开发 | [phase-6.md](phase-6.md) |
 
 ---
@@ -407,7 +407,7 @@ Phase 6 ░░░░░░░░░░░░░░░░░░░░ 待开发  
 
 ### 6.2 测试总览
 
-当前共 296 个单元测试，各阶段测试明细见对应阶段文档。
+当前共 326 个单元测试，各阶段测试明细见对应阶段文档。
 
 ```bash
 # 运行全部测试
@@ -476,7 +476,9 @@ j-agent/
 │   │       ├── glob.py         # GlobTool
 │   │       ├── grep.py         # GrepTool
 │   │       ├── memory.py       # MemoryTool
-│   │       └── skill.py        # UseSkillTool
+│   │       ├── skill.py        # UseSkillTool
+│   │       ├── plan.py         # PlanTool
+│   │       └── spawn.py        # SpawnAgentTool
 │   ├── skills/
 │   │   ├── __init__.py
 │   │   ├── skill.py            # Skill 数据类 + SkillRegistry + frontmatter 解析
@@ -491,7 +493,10 @@ j-agent/
 │   │   ├── __init__.py
 │   │   ├── risk.py             # 风险分级 + 危险命令检测
 │   │   └── manager.py          # PermissionManager（权限模式 + 决策）
-│   ├── planning/               # Phase 5
+│   ├── planning/
+│   │   ├── __init__.py
+│   │   ├── plan.py            # Task + Plan 数据结构
+│   │   └── subagent.py        # SubAgentRunner（子 Agent 派生/并行）
 │   └── observability/          # Phase 6
 └── tests/
     ├── __init__.py
@@ -511,5 +516,7 @@ j-agent/
     ├── test_memory_store.py
     ├── test_memory_tool.py
     ├── test_skills.py
-    └── test_permission.py
+    ├── test_permission.py
+    ├── test_plan.py
+    └── test_spawn.py
 ```

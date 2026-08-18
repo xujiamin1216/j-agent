@@ -16,6 +16,7 @@ from typing import Any
 
 from src.config import create_data_dir
 from src.llm.types import Message
+from src.planning.plan import Plan
 
 
 def _sessions_dir() -> Path:
@@ -33,6 +34,7 @@ class Session:
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now().isoformat())
     messages: list[Message] = field(default_factory=list)
+    plan: Plan | None = None
 
     def add_message(self, msg: Message) -> None:
         """Append a message and update the timestamp."""
@@ -50,6 +52,7 @@ class Session:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "messages": [m.to_dict() for m in self.messages],
+            "plan": self.plan.to_dict() if self.plan is not None else None,
         }
         path.write_text(
             json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -65,11 +68,13 @@ class Session:
             raise FileNotFoundError(f"会话不存在: {session_id}")
         data = json.loads(path.read_text(encoding="utf-8"))
         messages = [Message.from_dict(m) for m in data.get("messages", [])]
+        plan = Plan.from_dict(data.get("plan")) if data.get("plan") else None
         return cls(
             id=data["id"],
             created_at=data["created_at"],
             updated_at=data["updated_at"],
             messages=messages,
+            plan=plan,
         )
 
     @staticmethod
@@ -107,6 +112,6 @@ class Session:
             path.unlink()
 
     @classmethod
-    def from_messages(cls, messages: list[Message]) -> Session:
+    def from_messages(cls, messages: list[Message], plan: Plan | None = None) -> Session:
         """Create a new session from an existing message list."""
-        return cls(messages=list(messages))
+        return cls(messages=list(messages), plan=plan)
