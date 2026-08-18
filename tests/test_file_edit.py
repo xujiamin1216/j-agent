@@ -97,3 +97,19 @@ class TestFileEditTool:
             new_string="line1\nline2\nline3",
         )
         assert f.read_text(encoding="utf-8") == "line1\nline2\nline3\n"
+
+
+class TestFileEditSandbox:
+    def test_edit_outside_work_dir_rejected(self, tmp_path):
+        work_dir = tmp_path / "project"
+        work_dir.mkdir()
+        outside = tmp_path / "outside.txt"
+        outside.write_text("hello\n", encoding="utf-8")
+
+        tool = FileEditTool()
+        tool.work_dir = work_dir
+        with pytest.raises(PermissionError, match="超出工作目录"):
+            tool.execute(
+                path=str(outside), old_string="hello", new_string="bye"
+            )
+        assert outside.read_text(encoding="utf-8") == "hello\n"

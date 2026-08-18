@@ -18,14 +18,15 @@ class FileWriteTool(Tool):
     risk_level = RiskLevel.CONFIRM
     description = (
         "Write content to a file. Creates parent directories if needed. "
-        "Set 'append' to true to append instead of overwrite."
+        "Set 'append' to true to append instead of overwrite. Access is "
+        "restricted to files within the working directory."
     )
     parameters = {
         "type": "object",
         "properties": {
             "path": {
                 "type": "string",
-                "description": "Absolute or relative path to the file.",
+                "description": "Path to the file, relative to the working directory (or absolute within it).",
             },
             "content": {
                 "type": "string",
@@ -48,7 +49,7 @@ class FileWriteTool(Tool):
         append: bool = False,
         **kwargs: Any,
     ) -> str:
-        p = self._resolve_path(path)
+        p = self._resolve_work_path(path)
 
         # Create parent directories if they don't exist.
         p.parent.mkdir(parents=True, exist_ok=True)

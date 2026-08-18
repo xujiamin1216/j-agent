@@ -73,7 +73,7 @@ class TestFileReadWorkDir:
         result = tool.execute(path="test.txt")
         assert "hello work dir" in result
 
-    def test_absolute_path_unaffected_by_work_dir(self, tmp_path):
+    def test_absolute_path_outside_work_dir_rejected(self, tmp_path):
         work_dir = tmp_path / "project"
         work_dir.mkdir()
         outside = tmp_path / "outside.txt"
@@ -81,5 +81,25 @@ class TestFileReadWorkDir:
 
         tool = FileReadTool()
         tool.work_dir = work_dir
-        result = tool.execute(path=str(outside))
-        assert "outside file" in result
+        with pytest.raises(PermissionError, match="超出工作目录"):
+            tool.execute(path=str(outside))
+
+    def test_absolute_path_inside_work_dir_allowed(self, tmp_path):
+        work_dir = tmp_path / "project"
+        work_dir.mkdir()
+        f = work_dir / "inside.txt"
+        f.write_text("inside file\n", encoding="utf-8")
+
+        tool = FileReadTool()
+        tool.work_dir = work_dir
+        result = tool.execute(path=str(f))
+        assert "inside file" in result
+
+    def test_parent_traversal_rejected(self, tmp_path):
+        work_dir = tmp_path / "project"
+        work_dir.mkdir()
+
+        tool = FileReadTool()
+        tool.work_dir = work_dir
+        with pytest.raises(PermissionError, match="超出工作目录"):
+            tool.execute(path="../outside.txt")

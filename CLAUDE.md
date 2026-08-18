@@ -22,6 +22,7 @@ python -m pytest tests/test_tools.py::TestToolRegistry::test_execute_success -v 
 **工作上下文绑定**（`src/work_context.py`）：Agent 启动时绑定当前工作目录，提供三项能力：
 - **AGENT.md**：自动从工作目录加载 `AGENT.md`，内容追加到系统提示词，用于存放工作背景、编码约定、常用命令等指令。
 - **工具工作目录**：`Tool` 基类的 `_resolve_path()` 将相对路径基于工作目录解析，绝对路径不受影响。`ToolRegistry` 在注册时自动设置 `work_dir`。
+- **文件工具沙箱**：`Tool._resolve_work_path()` 将 `file_read`/`file_write`/`file_edit` 的访问限制在工作目录内，越界（绝对路径或 `..` 穿越）抛 `PermissionError`；仅在绑定 `work_dir` 时生效（独立使用工具时不受限）。
 - **记忆/会话隔离**：`MemoryTool` 和 `Session` 的数据持久化到工作目录下的 `.j-agent/`（如 `.j-agent/memory.json`、`.j-agent/sessions/`），不同工作目录互不干扰。
 - **Skills**：用户在工作目录下 `.j-agent/skills/<name>/SKILL.md` 定义 Skill prompt 模板，启动时描述自动注入系统提示词，LLM 根据自然语言触发条件通过 `use_skill` 工具调用。
 

@@ -22,14 +22,15 @@ class FileEditTool(Tool):
         "Replace a unique string in a file. The 'old_string' must appear "
         "exactly once in the file; if it appears multiple times, provide "
         "more context to make it unique. Use this for targeted edits "
-        "instead of rewriting the entire file."
+        "instead of rewriting the entire file. Access is restricted to files "
+        "within the working directory."
     )
     parameters = {
         "type": "object",
         "properties": {
             "path": {
                 "type": "string",
-                "description": "Absolute or relative path to the file.",
+                "description": "Path to the file, relative to the working directory (or absolute within it).",
             },
             "old_string": {
                 "type": "string",
@@ -52,7 +53,7 @@ class FileEditTool(Tool):
         new_string: str,
         **kwargs: Any,
     ) -> str:
-        p = self._resolve_path(path)
+        p = self._resolve_work_path(path)
 
         if not p.exists():
             raise FileNotFoundError(f"文件不存在: {path}")

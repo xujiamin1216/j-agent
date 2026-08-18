@@ -57,6 +57,23 @@ class Tool(ABC):
         p = Path(path)
         return p if p.is_absolute() else base / p
 
+    def _resolve_work_path(self, path: str) -> Path:
+        """Resolve *path* and enforce that it stays within the working directory.
+
+        File tools use this to sandbox access to the bound work directory.
+        The check only applies when a ``work_dir`` is bound (the normal CLI
+        case); standalone tools without a work directory are unrestricted.
+
+        Raises PermissionError if the resolved path escapes the work directory.
+        """
+        resolved = self._resolve_path(path)
+        if self.work_dir is None:
+            return resolved
+        base = self.work_dir.resolve()
+        if not resolved.resolve().is_relative_to(base):
+            raise PermissionError(f"路径超出工作目录范围: {path}")
+        return resolved
+
     @abstractmethod
     def execute(self, **kwargs: Any) -> str:
         """Run the tool with validated arguments. Returns output as a string."""

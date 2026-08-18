@@ -48,3 +48,25 @@ class TestFileWriteTool:
         tool = FileWriteTool()
         tool.execute(path=str(f), content="你好世界")
         assert f.read_text(encoding="utf-8") == "你好世界"
+
+
+class TestFileWriteSandbox:
+    def test_write_outside_work_dir_rejected(self, tmp_path):
+        work_dir = tmp_path / "project"
+        work_dir.mkdir()
+        outside = tmp_path / "outside.txt"
+
+        tool = FileWriteTool()
+        tool.work_dir = work_dir
+        with pytest.raises(PermissionError, match="超出工作目录"):
+            tool.execute(path=str(outside), content="nope")
+        assert not outside.exists()
+
+    def test_write_inside_work_dir_allowed(self, tmp_path):
+        work_dir = tmp_path / "project"
+        work_dir.mkdir()
+
+        tool = FileWriteTool()
+        tool.work_dir = work_dir
+        tool.execute(path="out.txt", content="ok")
+        assert (work_dir / "out.txt").read_text(encoding="utf-8") == "ok"

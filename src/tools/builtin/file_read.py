@@ -18,14 +18,15 @@ class FileReadTool(Tool):
     description = (
         "Read the contents of a text file. Returns lines with line numbers. "
         "Use 'offset' to start from a specific line and 'limit' to cap the "
-        "number of lines read (default 2000)."
+        "number of lines read (default 2000). Access is restricted to files "
+        "within the working directory."
     )
     parameters = {
         "type": "object",
         "properties": {
             "path": {
                 "type": "string",
-                "description": "Absolute or relative path to the file.",
+                "description": "Path to the file, relative to the working directory (or absolute within it).",
             },
             "offset": {
                 "type": "integer",
@@ -48,7 +49,7 @@ class FileReadTool(Tool):
         limit: int | None = None,
         **kwargs: Any,
     ) -> str:
-        p = self._resolve_path(path)
+        p = self._resolve_work_path(path)
 
         if not p.exists():
             raise FileNotFoundError(f"文件不存在: {path}")

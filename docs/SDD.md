@@ -218,6 +218,7 @@ j-agent 提供以下核心能力：
 **工作上下文绑定**（`src/work_context.py`）：Agent 启动时绑定当前工作目录，提供：
 - **AGENT.md**：自动从工作目录加载，内容追加到系统提示词。文件不存在或为空时忽略。
 - **工具工作目录**：文件/shell 工具的相对路径基于工作目录解析（`Tool._resolve_path()`），绝对路径不受影响。
+- **文件工具沙箱**：文件工具（`file_read`/`file_write`/`file_edit`）通过 `Tool._resolve_work_path()` 将访问限制在工作目录内，越界（绝对路径或 `..` 穿越）抛 `PermissionError`；仅在绑定 `work_dir` 时生效。
 - **记忆/会话隔离**：`MemoryTool` 和 `Session` 的数据持久化到 `<work_dir>/.j-agent/`（如 `memory.json`、`sessions/`），不同工作目录互不干扰。
 - **配置覆盖**：工作目录下 `.j-agent.env` 覆盖 `.env` 配置（优先级最高）。
 
