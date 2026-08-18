@@ -17,7 +17,7 @@ python -m pytest tests/ -v
 python -m pytest tests/test_tools.py::TestToolRegistry::test_execute_success -v  # 单个测试
 ```
 
-配置通过 `.env` 文件进行（参见 `.env.example`）。必填项：`J_AGENT_PROVIDER`（claude/openai）和 `J_AGENT_API_KEY`。可选：`J_AGENT_BASE_URL`（自定义 API 端点）、`J_AGENT_MAX_CONTEXT_TOKENS`（上下文窗口上限，默认 100000）、`J_AGENT_COMPRESS_RATIO`（压缩切割位置比例，默认 0.6）、`J_AGENT_SUMMARY_RATIO`（摘要最大长度占阈值比例，默认 0.1）。工作目录下可放置 `.j-agent.env` 覆盖全局配置（优先级最高）。
+配置通过 `.env` 文件进行（参见 `.env.example`）。必填项：`J_AGENT_PROVIDER`（claude/openai）和 `J_AGENT_API_KEY`。可选：`J_AGENT_BASE_URL`（自定义 API 端点）、`J_AGENT_MAX_CONTEXT_TOKENS`（上下文窗口上限，默认 100000）、`J_AGENT_COMPRESS_RATIO`（压缩切割位置比例，默认 0.6）、`J_AGENT_SUMMARY_RATIO`（摘要最大长度占阈值比例，默认 0.1）、`J_AGENT_PERMISSION_MODE`（权限模式 auto/ask/yolo，默认 auto）。工作目录下可放置 `.j-agent.env` 覆盖全局配置（优先级最高）。
 
 **工作上下文绑定**（`src/work_context.py`）：Agent 启动时绑定当前工作目录，提供三项能力：
 - **AGENT.md**：自动从工作目录加载 `AGENT.md`，内容追加到系统提示词，用于存放工作背景、编码约定、常用命令等指令。
@@ -67,6 +67,17 @@ Skills 是用户定义的 prompt 模板，LLM 根据自然语言触发条件自�
 - **模板变量**：`{{args}}`（LLM 传入参数）、`{{script_output}}`（脚本输出）。
 - **CLI 命令**：`/skills` 列出可用 Skills。
 
+### 权限系统 (`src/permission/`)
+
+防止 Agent 执行危险操作，给用户控制权。
+
+- **风险分级**（`permission/risk.py`）：`RiskLevel` 三级 `safe`/`confirm`/`dangerous`。`Tool` 基类 `risk_level` 类属性默认 `safe`，`bash`/`file_write`/`file_edit`/`use_skill` 标记为 `confirm`。
+- **危险操作检测**（`permission/risk.py`）：`detect_dangerous_command()` 用正则匹配 shell 命令（rm、git push/reset/clean、sudo、chmod -R、mkfs、shutdown、fork 炸弹、`curl | sh` 等），`confirm` 工具带 `command` 参数时动态升级为 `dangerous`。
+- **权限模式**（`permission/manager.py`）：`PermissionManager` 支持 `auto`（safe 自动放行，confirm/dangerous 确认，默认）/ `ask`（全部确认）/ `yolo`（全部放行）。`check()` 返回 `PermissionDecision`。
+- **交互确认**：`PermissionManager` 注入 `ask_callback`，CLI 用 rich 面板展示工具名+参数+风险级别，提示 `[y/N]`；无回调时非 safe 操作默认拒绝（fail-closed）。
+- **Agent 集成**：`Agent` 接受可选 `permission_manager`，执行工具前调用 `check()`，拒绝时触发 `permission_denied` 事件并返回 `is_error` 结果（`[权限拒绝] ...`）。
+- **CLI 命令**：`/permission` 显示当前模式，`/permission <mode>` 切换；配置项 `J_AGENT_PERMISSION_MODE`。
+
 ## 设计文档
 
 总方案 SDD 位于 `docs/SDD.md`，各阶段详细设计拆分为独立文档：
@@ -76,7 +87,8 @@ Skills 是用户定义的 prompt 模板，LLM 根据自然语言触发条件自�
 - `docs/phase-2.md` -- Phase 2: 工具系统增强（已完成）
 - `docs/phase-3.md` -- Phase 3: 记忆与上下文管理（已完成）
 - `docs/phase-skills.md` -- Skills: Skill prompt 模板与自然语言触发（已完成）
-- `docs/phase-4.md` ~ `docs/phase-6.md` -- Phase 4-6: 权限/规划/可观测性（待开发）
+- `docs/phase-4.md` -- Phase 4: 权限系统（已完成）
+- `docs/phase-5.md` ~ `docs/phase-6.md` -- Phase 5-6: 规划/可观测性（待开发）
 
 ## 约定
 

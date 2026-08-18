@@ -9,11 +9,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from src.permission.risk import RiskLevel
 from src.tools.base import Tool
 
 
 class FileWriteTool(Tool):
     name = "file_write"
+    risk_level = RiskLevel.CONFIRM
     description = (
         "Write content to a file. Creates parent directories if needed. "
         "Set 'append' to true to append instead of overwrite."

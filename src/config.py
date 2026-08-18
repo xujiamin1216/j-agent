@@ -13,6 +13,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from src.permission.manager import PermissionMode
+
 # File name for project-specific context loaded into the system prompt.
 CONTEXT_FILE = "AGENT.md"
 
@@ -46,6 +48,7 @@ class Config:
     max_context_tokens: int = 100_000
     compress_ratio: float = 0.6
     summary_ratio: float = 0.1
+    permission_mode: str = "auto"  # "auto" | "ask" | "yolo"
 
     @classmethod
     def from_env(cls) -> Config:
@@ -118,6 +121,13 @@ class Config:
         compress_ratio = float(os.getenv("J_AGENT_COMPRESS_RATIO", "0.6"))
         summary_ratio = float(os.getenv("J_AGENT_SUMMARY_RATIO", "0.1"))
 
+        permission_mode = os.getenv("J_AGENT_PERMISSION_MODE", "auto").lower()
+        if permission_mode not in PermissionMode.ALL:
+            raise RuntimeError(
+                f"J_AGENT_PERMISSION_MODE 无效: {permission_mode} "
+                f"（可选: auto / ask / yolo）"
+            )
+
         return cls(
             provider=provider,
             model=model,
@@ -128,6 +138,7 @@ class Config:
             max_context_tokens=max_context_tokens,
             compress_ratio=compress_ratio,
             summary_ratio=summary_ratio,
+            permission_mode=permission_mode,
         )
 
 

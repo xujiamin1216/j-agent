@@ -11,11 +11,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from src.permission.risk import RiskLevel
 from src.tools.base import Tool
 
 
 class FileEditTool(Tool):
     name = "file_edit"
+    risk_level = RiskLevel.CONFIRM
     description = (
         "Replace a unique string in a file. The 'old_string' must appear "
         "exactly once in the file; if it appears multiple times, provide "

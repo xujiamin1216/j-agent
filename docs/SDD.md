@@ -2,7 +2,7 @@
 title: j-agent 软件设计文档 (SDD)
 version: 0.1.0
 date: 2026-08-03
-status: Phase 3 已实现
+status: Phase 4 已实现
 ---
 
 # j-agent 软件设计文档
@@ -139,7 +139,7 @@ j-agent 提供以下核心能力：
 | Memory | `memory/` | 会话持久化、Token 计数、上下文管理、跨会话记忆 | 3 |
 | Skills | `skills/` | Skill prompt 模板、渐进式加载、自然语言触发 | Skills |
 | UseSkillTool | `tools/builtin/skill.py` | LLM 调用以激活 Skill | Skills |
-| Permission | `permission/` | 风险分级、权限校验 | 4 |
+| Permission | `permission/` | 风险分级、权限模式、危险操作检测 | 4 |
 | Planning | `planning/` | 任务分解、计划跟踪 | 5 |
 | Observability | `observability/` | 追踪、日志、成本统计 | 6 |
 
@@ -375,7 +375,7 @@ Agent.run(user_input)
 Phase 1 ████████████████████ 完成  MVP: Agent Loop + 工具框架 + 多模型
 Phase 2 ████████████████████ 完成  工具系统增强 (文件/shell/grep/校验/自动发现)
 Phase 3 ████████████████████ 完成  记忆与上下文管理
-Phase 4 ░░░░░░░░░░░░░░░░░░░░ 待开发  权限系统
+Phase 4 ████████████████████ 完成  权限系统
 Phase 5 ░░░░░░░░░░░░░░░░░░░░ 待开发  规划与子 Agent
 Phase 6 ░░░░░░░░░░░░░░░░░░░░ 待开发  可观测性
 ```
@@ -388,7 +388,7 @@ Phase 6 ░░░░░░░░░░░░░░░░░░░░ 待开发  
 | Phase 2: 工具系统增强 | 已完成 | [phase-2.md](phase-2.md) |
 | Phase 3: 记忆与上下文管理 | 已完成 | [phase-3.md](phase-3.md) |
 | Skills: Skill prompt 模板 | 已完成 | [phase-skills.md](phase-skills.md) |
-| Phase 4: 权限系统 | 待开发 | [phase-4.md](phase-4.md) |
+| Phase 4: 权限系统 | 已完成 | [phase-4.md](phase-4.md) |
 | Phase 5: 规划与子 Agent | 待开发 | [phase-5.md](phase-5.md) |
 | Phase 6: 可观测性 | 待开发 | [phase-6.md](phase-6.md) |
 
@@ -406,7 +406,7 @@ Phase 6 ░░░░░░░░░░░░░░░░░░░░ 待开发  
 
 ### 6.2 测试总览
 
-当前共 239 个单元测试，各阶段测试明细见对应阶段文档。
+当前共 296 个单元测试，各阶段测试明细见对应阶段文档。
 
 ```bash
 # 运行全部测试
@@ -486,7 +486,10 @@ j-agent/
 │   │   ├── token_counter.py       # Token 计数 (tiktoken / 启发式)
 │   │   ├── context_manager.py     # 上下文截断 + 压缩
 │   │   └── memory_store.py        # 跨会话键值存储
-│   ├── permission/             # Phase 4
+│   ├── permission/
+│   │   ├── __init__.py
+│   │   ├── risk.py             # 风险分级 + 危险命令检测
+│   │   └── manager.py          # PermissionManager（权限模式 + 决策）
 │   ├── planning/               # Phase 5
 │   └── observability/          # Phase 6
 └── tests/
@@ -506,5 +509,6 @@ j-agent/
     ├── test_context_manager.py
     ├── test_memory_store.py
     ├── test_memory_tool.py
-    └── test_skills.py
+    ├── test_skills.py
+    └── test_permission.py
 ```

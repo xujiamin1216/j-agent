@@ -9,11 +9,13 @@ from __future__ import annotations
 import subprocess
 from typing import Any
 
+from src.permission.risk import RiskLevel
 from src.tools.base import Tool
 
 
 class BashTool(Tool):
     name = "bash"
+    risk_level = RiskLevel.CONFIRM
     description = (
         "Execute a shell command and return stdout, stderr, and exit code. "
         "Use 'timeout' to set a max execution time in seconds (default 30). "

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.permission.risk import RiskLevel
 from src.skills.discovery import discover_skills
 from src.skills.skill import SkillRegistry
 from src.tools.base import Tool
@@ -20,6 +21,7 @@ from src.tools.base import Tool
 
 class UseSkillTool(Tool):
     name = "use_skill"
+    risk_level = RiskLevel.CONFIRM
     description = (
         "Use a skill by name. Skills provide specialized capabilities and "
         "instructions. Available skills and their trigger conditions are "

@@ -15,11 +15,12 @@ from typing import TYPE_CHECKING, Callable
 
 from src.config import Config
 from src.llm.base import LLMProvider
-from src.llm.types import Message, ToolResult
+from src.llm.types import Message, ToolCall, ToolResult
 from src.tools.base import ToolRegistry
 
 if TYPE_CHECKING:
     from src.memory.context_manager import ContextManager
+    from src.permission.manager import PermissionManager
 
 # Maximum consecutive LLM calls for a single user turn. Prevents infinite
 # tool-call loops if the LLM keeps requesting tools without finishing.
@@ -39,6 +40,7 @@ class Agent:
         tools: ToolRegistry | None = None,
         on_event: EventCallback | None = None,
         context_manager: ContextManager | None = None,
+        permission_manager: PermissionManager | None = None,
     ) -> None:
         self._config = config
         self._provider = provider
@@ -46,6 +48,7 @@ class Agent:
         self._messages: list[Message] = []
         self._on_event = on_event or _noop_callback
         self._context_manager = context_manager
+        self._permission_manager = permission_manager
 
     @property
     def tools(self) -> ToolRegistry:
@@ -54,6 +57,10 @@ class Agent:
     @property
     def messages(self) -> list[Message]:
         return self._messages
+
+    @property
+    def permission_manager(self) -> PermissionManager | None:
+        return self._permission_manager
 
     def run(self, user_input: str) -> str:
         """Process one user turn and return the assistant's text response.
@@ -92,13 +99,7 @@ class Agent:
                     {"name": tc.name, "arguments": tc.arguments},
                 )
 
-                result = self._tools.execute(tc.name, tc.arguments)
-                # Attach the real tool_call_id to the result.
-                result = ToolResult(
-                    tool_call_id=tc.id,
-                    content=result.content,
-                    is_error=result.is_error,
-                )
+                result = self._execute_tool(tc)
 
                 self._on_event(
                     "tool_result",
@@ -121,6 +122,39 @@ class Agent:
         msg = f"Agent reached max iterations ({MAX_ITERATIONS}) without completing."
         self._on_event("max_iterations", {"message": msg})
         return msg
+
+    def _execute_tool(self, tc: ToolCall) -> ToolResult:
+        """Execute a tool call, gating it through the permission manager.
+
+        If a permission manager is configured and denies the call, a
+        ``permission_denied`` event is emitted and an ``is_error`` result is
+        returned without executing the tool.
+        """
+        if self._permission_manager is not None:
+            decision = self._permission_manager.check(tc.name, tc.arguments)
+            if not decision.allowed:
+                self._on_event(
+                    "permission_denied",
+                    {
+                        "name": tc.name,
+                        "arguments": tc.arguments,
+                        "risk_level": decision.risk_level,
+                        "reason": decision.reason,
+                    },
+                )
+                return ToolResult(
+                    tool_call_id=tc.id,
+                    content=f"[权限拒绝] {decision.reason}",
+                    is_error=True,
+                )
+
+        result = self._tools.execute(tc.name, tc.arguments)
+        # Attach the real tool_call_id to the result.
+        return ToolResult(
+            tool_call_id=tc.id,
+            content=result.content,
+            is_error=result.is_error,
+        )
 
 
 def _noop_callback(event: str, data: dict) -> None:

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from src.llm.types import ToolResult, ToolSpec
+from src.permission.risk import RiskLevel
 from src.tools.validation import ValidationError, validate_arguments
 
 # Maximum characters of tool output before truncation kicks in.
@@ -35,6 +36,11 @@ class Tool(ABC):
         "properties": {},
         "additionalProperties": False,
     }
+
+    # Static risk level for permission gating (Phase 4). Subclasses that
+    # mutate state or execute code should override this to
+    # ``RiskLevel.CONFIRM`` (or ``RiskLevel.DANGEROUS``).
+    risk_level: str = RiskLevel.SAFE
 
     # Working directory for path resolution. Set by ToolRegistry.
     work_dir: Path | None = None
@@ -132,6 +138,10 @@ class ToolRegistry:
     def names(self) -> list[str]:
         """List all registered tool names."""
         return list(self._tools.keys())
+
+    def risk_levels(self) -> dict[str, str]:
+        """Map each registered tool name to its static risk level."""
+        return {name: tool.risk_level for name, tool in self._tools.items()}
 
 
 def _truncate(text: str, limit: int = MAX_OUTPUT_CHARS) -> str:

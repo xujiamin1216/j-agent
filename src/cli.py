@@ -23,6 +23,8 @@ from src.llm.factory import create_provider
 from src.memory.context_manager import ContextManager, ContextManagerConfig
 from src.memory.conversation import Session
 from src.memory.token_counter import create_token_counter
+from src.permission.manager import PermissionManager, PermissionMode
+from src.permission.risk import RiskLevel
 from src.skills.discovery import discover_skills
 from src.tools.base import ToolRegistry
 from src.tools.discovery import discover_builtin_tools
@@ -65,6 +67,13 @@ def create_agent(config: Config | None = None, ctx: WorkContext | None = None) -
     )
     context_manager = ContextManager(token_counter, provider, ctx_config)
 
+    # Create permission manager gating tool execution.
+    permission_manager = PermissionManager(
+        mode=cfg.permission_mode,
+        risk_map=tools.risk_levels(),
+        ask_callback=_ask_permission(console),
+    )
+
     def on_event(event: str, data: dict) -> None:
         if event == "tool_call":
             console.print(
@@ -93,6 +102,14 @@ def create_agent(config: Config | None = None, ctx: WorkContext | None = None) -
                 f"[dim]上下文已管理: {data['before_count']} -> "
                 f"{data['after_count']} 条消息[/]"
             )
+        elif event == "permission_denied":
+            console.print(
+                Panel(
+                    data["reason"],
+                    title=f"[bold red]permission denied[/] {data['name']}",
+                    border_style="red",
+                )
+            )
 
     return Agent(
         config=cfg,
@@ -100,7 +117,38 @@ def create_agent(config: Config | None = None, ctx: WorkContext | None = None) -
         tools=tools,
         on_event=on_event,
         context_manager=context_manager,
+        permission_manager=permission_manager,
     )
+
+
+def _ask_permission(console: Console):
+    """Build an interactive confirmation callback for the permission manager."""
+    style_map = {
+        RiskLevel.SAFE: "green",
+        RiskLevel.CONFIRM: "yellow",
+        RiskLevel.DANGEROUS: "red",
+    }
+
+    def ask(tool_name: str, arguments: dict, risk_level: str) -> bool:
+        style = style_map.get(risk_level, "yellow")
+        console.print(
+            Panel(
+                Syntax(
+                    _format_arguments(arguments),
+                    "json",
+                    theme="monokai",
+                    word_wrap=True,
+                ),
+                title=f"[bold {style}]{risk_level}[/] [bold]{tool_name}[/]",
+                border_style=style,
+            )
+        )
+        answer = console.input(
+            f"[bold {style}]允许执行该操作?[/] [y/N] "
+        ).strip().lower()
+        return answer in ("y", "yes")
+
+    return ask
 
 
 def _format_arguments(args: dict) -> str:
@@ -138,6 +186,7 @@ def main() -> None:
         f"Model: [bold]{config.model}[/]\n"
         f"  Work dir: [bold]{ctx.work_dir}[/]\n"
         f"  Tools: {', '.join(agent.tools.names())}\n"
+        f"  Permission: [bold]{config.permission_mode}[/]\n"
         + (
             f"  Context: [bold]{CONTEXT_FILE}[/] loaded\n"
             if load_work_context()
@@ -205,6 +254,7 @@ def _handle_command(
                 "[bold]/help[/]      Show this help\n"
                 "[bold]/tools[/]     List registered tools\n"
                 "[bold]/skills[/]    List available skills\n"
+                "[bold]/permission[/] [mode]  Show or set permission mode (auto/ask/yolo)\n"
                 "[bold]/sessions[/]  List saved sessions\n"
                 "[bold]/save[/]      Save current conversation\n"
                 "[bold]/load[/] <id> Load a saved session\n"
@@ -244,6 +294,26 @@ def _handle_command(
                 title=f"Available Skills ({len(skills)})",
                 border_style="cyan",
             )
+        )
+        return False
+
+    if parts[0].lower() == "/permission":
+        manager = agent.permission_manager
+        if manager is None:
+            console.print("[dim]权限系统未启用。[/]")
+            return False
+        if len(parts) > 1:
+            new_mode = parts[1].strip().lower()
+            if new_mode not in PermissionMode.ALL:
+                console.print(
+                    f"[bold red]无效模式:[/] {new_mode}（可选: auto / ask / yolo）"
+                )
+                return False
+            manager.mode = new_mode
+            console.print(f"[dim]权限模式已切换为: [bold]{new_mode}[/][/]")
+            return False
+        console.print(
+            f"[dim]当前权限模式: [bold]{manager.mode}[/]（auto / ask / yolo）[/]"
         )
         return False
 
