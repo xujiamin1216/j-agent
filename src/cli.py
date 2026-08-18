@@ -23,6 +23,7 @@ from src.llm.factory import create_provider
 from src.memory.context_manager import ContextManager, ContextManagerConfig
 from src.memory.conversation import Session
 from src.memory.token_counter import create_token_counter
+from src.skills.discovery import discover_skills
 from src.tools.base import ToolRegistry
 from src.tools.discovery import discover_builtin_tools
 from src.work_context import WorkContext
@@ -129,6 +130,7 @@ def main() -> None:
 
     ctx = WorkContext.from_cwd()
     agent = create_agent(config, ctx)
+    skills = discover_skills(ctx.skills_dir)
 
     console.print(BANNER, style="bold cyan")
     console.print(
@@ -139,6 +141,11 @@ def main() -> None:
         + (
             f"  Context: [bold]{CONTEXT_FILE}[/] loaded\n"
             if load_work_context()
+            else ""
+        )
+        + (
+            f"  Skills: {', '.join(s.name for s in skills)}\n"
+            if skills
             else ""
         )
         + f"  Type [bold]/help[/] for commands, [bold]/exit[/] to quit.\n"
@@ -157,7 +164,9 @@ def main() -> None:
 
         # Handle slash commands.
         if user_input.startswith("/"):
-            if _handle_command(user_input, agent, console, ctx.sessions_dir):
+            if _handle_command(
+                user_input, agent, console, ctx.sessions_dir, ctx.skills_dir
+            ):
                 break
             continue
 
@@ -176,7 +185,11 @@ def main() -> None:
 
 
 def _handle_command(
-    command: str, agent: Agent, console: Console, sessions_dir: Path | None = None
+    command: str,
+    agent: Agent,
+    console: Console,
+    sessions_dir: Path | None = None,
+    skills_dir: Path | None = None,
 ) -> bool:
     """Handle a slash command. Returns True if the agent should exit."""
     cmd = command.lower()
@@ -191,6 +204,7 @@ def _handle_command(
             Panel(
                 "[bold]/help[/]      Show this help\n"
                 "[bold]/tools[/]     List registered tools\n"
+                "[bold]/skills[/]    List available skills\n"
                 "[bold]/sessions[/]  List saved sessions\n"
                 "[bold]/save[/]      Save current conversation\n"
                 "[bold]/load[/] <id> Load a saved session\n"
@@ -210,6 +224,24 @@ def _handle_command(
             Panel(
                 "\n".join(lines) or "  No tools registered.",
                 title=f"Registered Tools ({len(specs)})",
+                border_style="cyan",
+            )
+        )
+        return False
+
+    if cmd == "/skills":
+        skills = discover_skills(skills_dir)
+        if not skills:
+            console.print("[dim]No skills available.[/]")
+            return False
+        lines = []
+        for skill in skills:
+            desc = skill.description.split("\n")[0]
+            lines.append(f"  [bold]{skill.name}[/] - {desc}")
+        console.print(
+            Panel(
+                "\n".join(lines),
+                title=f"Available Skills ({len(skills)})",
                 border_style="cyan",
             )
         )

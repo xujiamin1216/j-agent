@@ -96,6 +96,20 @@ class Config:
                 f"# 工作上下文 ({CONTEXT_FILE})\n\n{work_context}"
             )
 
+        # Append skill descriptions for natural language triggering.
+        from src.skills.discovery import build_skill_descriptions
+
+        skill_descs = build_skill_descriptions(Path.cwd())
+        if skill_descs:
+            system_prompt = (
+                f"{system_prompt}\n\n---\n\n"
+                f"# Skills\n\n"
+                f"You have access to the following skills. When a user's request "
+                f"matches a skill's trigger conditions, invoke the `use_skill` tool "
+                f"with the skill name BEFORE generating any other response about "
+                f"the task.\n\n{skill_descs}"
+            )
+
         max_tokens = int(os.getenv("J_AGENT_MAX_TOKENS", "4096"))
 
         base_url = os.getenv("J_AGENT_BASE_URL") or None

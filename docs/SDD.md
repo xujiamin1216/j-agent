@@ -137,6 +137,8 @@ j-agent 提供以下核心能力：
 | Glob Tool | `tools/builtin/glob.py` | 文件名 glob 匹配 | 2 |
 | Grep Tool | `tools/builtin/grep.py` | 文件内容正则搜索 | 2 |
 | Memory | `memory/` | 会话持久化、Token 计数、上下文管理、跨会话记忆 | 3 |
+| Skills | `skills/` | Skill prompt 模板、渐进式加载、自然语言触发 | Skills |
+| UseSkillTool | `tools/builtin/skill.py` | LLM 调用以激活 Skill | Skills |
 | Permission | `permission/` | 风险分级、权限校验 | 4 |
 | Planning | `planning/` | 任务分解、计划跟踪 | 5 |
 | Observability | `observability/` | 追踪、日志、成本统计 | 6 |
@@ -385,6 +387,7 @@ Phase 6 ░░░░░░░░░░░░░░░░░░░░ 待开发  
 | Phase 1: MVP - 核心 Agent Loop | 已完成 | [phase-1.md](phase-1.md) |
 | Phase 2: 工具系统增强 | 已完成 | [phase-2.md](phase-2.md) |
 | Phase 3: 记忆与上下文管理 | 已完成 | [phase-3.md](phase-3.md) |
+| Skills: Skill prompt 模板 | 已完成 | [phase-skills.md](phase-skills.md) |
 | Phase 4: 权限系统 | 待开发 | [phase-4.md](phase-4.md) |
 | Phase 5: 规划与子 Agent | 待开发 | [phase-5.md](phase-5.md) |
 | Phase 6: 可观测性 | 待开发 | [phase-6.md](phase-6.md) |
@@ -403,7 +406,7 @@ Phase 6 ░░░░░░░░░░░░░░░░░░░░ 待开发  
 
 ### 6.2 测试总览
 
-当前共 167 个单元测试，各阶段测试明细见对应阶段文档。
+当前共 239 个单元测试，各阶段测试明细见对应阶段文档。
 
 ```bash
 # 运行全部测试
@@ -471,7 +474,12 @@ j-agent/
 │   │       ├── bash.py         # BashTool
 │   │       ├── glob.py         # GlobTool
 │   │       ├── grep.py         # GrepTool
-│   │       └── memory.py       # MemoryTool
+│   │       ├── memory.py       # MemoryTool
+│   │       └── skill.py        # UseSkillTool
+│   ├── skills/
+│   │   ├── __init__.py
+│   │   ├── skill.py            # Skill 数据类 + SkillRegistry + frontmatter 解析
+│   │   └── discovery.py        # 自动发现 + 描述生成
 │   ├── memory/
 │   │   ├── __init__.py
 │   │   ├── conversation.py        # Session 持久化
@@ -497,5 +505,6 @@ j-agent/
     ├── test_conversation.py
     ├── test_context_manager.py
     ├── test_memory_store.py
-    └── test_memory_tool.py
+    ├── test_memory_tool.py
+    └── test_skills.py
 ```

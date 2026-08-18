@@ -43,3 +43,10 @@ class WorkContext:
         path = self.data_dir / "sessions"
         path.mkdir(parents=True, exist_ok=True)
         return path
+
+    @property
+    def skills_dir(self) -> Path:
+        """Path to the project-scoped skills directory."""
+        path = self.data_dir / "skills"
+        path.mkdir(parents=True, exist_ok=True)
+        return path

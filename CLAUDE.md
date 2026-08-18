@@ -23,6 +23,7 @@ python -m pytest tests/test_tools.py::TestToolRegistry::test_execute_success -v 
 - **AGENT.md**：自动从工作目录加载 `AGENT.md`，内容追加到系统提示词，用于存放工作背景、编码约定、常用命令等指令。
 - **工具工作目录**：`Tool` 基类的 `_resolve_path()` 将相对路径基于工作目录解析，绝对路径不受影响。`ToolRegistry` 在注册时自动设置 `work_dir`。
 - **记忆/会话隔离**：`MemoryTool` 和 `Session` 的数据持久化到工作目录下的 `.j-agent/`（如 `.j-agent/memory.json`、`.j-agent/sessions/`），不同工作目录互不干扰。
+- **Skills**：用户在工作目录下 `.j-agent/skills/<name>/SKILL.md` 定义 Skill prompt 模板，启动时描述自动注入系统提示词，LLM 根据自然语言触发条件通过 `use_skill` 工具调用。
 
 ## 架构
 
@@ -55,6 +56,17 @@ python -m pytest tests/test_tools.py::TestToolRegistry::test_execute_success -v 
 
 Agent 接受可选的 `context_manager` 参数，在每次调用 `provider.chat()` 前执行 `manage()`。
 
+### Skills 系统 (`src/skills/`)
+
+Skills 是用户定义的 prompt 模板，LLM 根据自然语言触发条件自动激活。每个 Skill 是 `.j-agent/skills/<name>/` 目录，内含 `SKILL.md`（frontmatter + prompt 正文）及可选脚本和引用文件。
+
+- **渐进式加载**：启动时仅扫描 frontmatter（name、description、script），完整内容按需从磁盘读取。
+- **自然语言触发**：Skill 描述注入系统提示词，LLM 判断是否匹配触发条件，通过 `use_skill` 工具调用。
+- **脚本支持**：frontmatter `script` 字段指定脚本，调用时执行，stdout 注入 `{{script_output}}`。
+- **引用支持**：prompt 中 `@file: path` 指令，展开时内联文件内容（先 skill 目录再工作目录查找）。
+- **模板变量**：`{{args}}`（LLM 传入参数）、`{{script_output}}`（脚本输出）。
+- **CLI 命令**：`/skills` 列出可用 Skills。
+
 ## 设计文档
 
 总方案 SDD 位于 `docs/SDD.md`，各阶段详细设计拆分为独立文档：
@@ -63,6 +75,7 @@ Agent 接受可选的 `context_manager` 参数，在每次调用 `provider.chat(
 - `docs/phase-1.md` -- Phase 1: MVP 核心 Agent Loop（已完成）
 - `docs/phase-2.md` -- Phase 2: 工具系统增强（已完成）
 - `docs/phase-3.md` -- Phase 3: 记忆与上下文管理（已完成）
+- `docs/phase-skills.md` -- Skills: Skill prompt 模板与自然语言触发（已完成）
 - `docs/phase-4.md` ~ `docs/phase-6.md` -- Phase 4-6: 权限/规划/可观测性（待开发）
 
 ## 约定

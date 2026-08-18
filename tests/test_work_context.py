@@ -29,6 +29,11 @@ class TestWorkContext:
         assert ctx.sessions_dir == tmp_path / ".j-agent" / "sessions"
         assert ctx.sessions_dir.exists()
 
+    def test_skills_dir(self, tmp_path: Path):
+        ctx = WorkContext(work_dir=tmp_path)
+        assert ctx.skills_dir == tmp_path / ".j-agent" / "skills"
+        assert ctx.skills_dir.exists()
+
     def test_data_dir_created_on_access(self, tmp_path: Path):
         ctx = WorkContext(work_dir=tmp_path)
         # Directory should not exist until accessed.
@@ -47,3 +52,4 @@ class TestWorkContext:
 
         assert ctx_a.memory_file != ctx_b.memory_file
         assert ctx_a.sessions_dir != ctx_b.sessions_dir
+        assert ctx_a.skills_dir != ctx_b.skills_dir
