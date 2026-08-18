@@ -9,7 +9,7 @@ from __future__ import annotations
 import anthropic
 
 from src.llm.base import LLMProvider
-from src.llm.types import Message, ToolCall, ToolSpec
+from src.llm.types import Message, ToolCall, ToolSpec, Usage
 
 
 class ClaudeProvider(LLMProvider):
@@ -65,9 +65,17 @@ class ClaudeProvider(LLMProvider):
                     )
                 )
 
+        usage = None
+        if getattr(response, "usage", None) is not None:
+            usage = Usage(
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+            )
+
         return Message.assistant(
             content="\n".join(text_parts),
             tool_calls=tool_calls,
+            usage=usage,
         )
 
     def _to_anthropic_msg(self, msg: Message) -> dict:

@@ -2,7 +2,7 @@
 title: j-agent 软件设计文档 (SDD)
 version: 0.1.0
 date: 2026-08-03
-status: Phase 5 已实现
+status: Phase 6 已实现
 ---
 
 # j-agent 软件设计文档
@@ -141,7 +141,7 @@ j-agent 提供以下核心能力：
 | UseSkillTool | `tools/builtin/skill.py` | LLM 调用以激活 Skill | Skills |
 | Permission | `permission/` | 风险分级、权限模式、危险操作检测 | 4 |
 | Planning | `planning/` | 任务分解、计划跟踪、子 Agent 派生 | 5 |
-| Observability | `observability/` | 追踪、日志、成本统计 | 6 |
+| Observability | `observability/` | 结构化追踪、价格表、成本统计 | 6 |
 
 ---
 
@@ -313,6 +313,8 @@ Agent 不负责创建 LLMProvider，而是接收外部创建好的实例。Provi
 | `assistant_response` | `{content}` | LLM 返回最终文本 |
 | `context_managed` | `{before_count, after_count}` | 上下文被截断或压缩 |
 | `max_iterations` | `{message}` | 达到最大迭代次数 |
+| `llm_request` | `{model, message_count, tool_names, system, messages}` | LLM 调用前 |
+| `llm_response` | `{content, tool_calls, usage}` | LLM 调用后 |
 
 **安全机制**：
 - `MAX_ITERATIONS = 20`：单轮用户输入最多 20 次 LLM 调用，防止无限工具调用循环
@@ -378,7 +380,7 @@ Phase 2 ████████████████████ 完成  工
 Phase 3 ████████████████████ 完成  记忆与上下文管理
 Phase 4 ████████████████████ 完成  权限系统
 Phase 5 ████████████████████ 完成  规划与子 Agent
-Phase 6 ░░░░░░░░░░░░░░░░░░░░ 待开发  可观测性
+Phase 6 ████████████████████ 完成  可观测性
 ```
 
 ### 5.2 各阶段文档
@@ -391,7 +393,7 @@ Phase 6 ░░░░░░░░░░░░░░░░░░░░ 待开发  
 | Skills: Skill prompt 模板 | 已完成 | [phase-skills.md](phase-skills.md) |
 | Phase 4: 权限系统 | 已完成 | [phase-4.md](phase-4.md) |
 | Phase 5: 规划与子 Agent | 已完成 | [phase-5.md](phase-5.md) |
-| Phase 6: 可观测性 | 待开发 | [phase-6.md](phase-6.md) |
+| Phase 6: 可观测性 | 已完成 | [phase-6.md](phase-6.md) |
 
 ---
 
@@ -407,7 +409,7 @@ Phase 6 ░░░░░░░░░░░░░░░░░░░░ 待开发  
 
 ### 6.2 测试总览
 
-当前共 326 个单元测试，各阶段测试明细见对应阶段文档。
+当前共 344 个单元测试，各阶段测试明细见对应阶段文档。
 
 ```bash
 # 运行全部测试
@@ -497,7 +499,10 @@ j-agent/
 │   │   ├── __init__.py
 │   │   ├── plan.py            # Task + Plan 数据结构
 │   │   └── subagent.py        # SubAgentRunner（子 Agent 派生/并行）
-│   └── observability/          # Phase 6
+│   └── observability/
+│       ├── __init__.py
+│       ├── tracer.py          # Tracer 结构化追踪 + 成本聚合
+│       └── pricing.py         # 模型价格表 + 成本估算
 └── tests/
     ├── __init__.py
     ├── test_types.py
@@ -518,5 +523,6 @@ j-agent/
     ├── test_skills.py
     ├── test_permission.py
     ├── test_plan.py
-    └── test_spawn.py
+    ├── test_spawn.py
+    └── test_tracer.py
 ```

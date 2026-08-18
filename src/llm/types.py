@@ -31,13 +31,35 @@ class ToolResult:
 
 
 @dataclass
+class Usage:
+    """Token usage reported by the provider for a single LLM call."""
+
+    input_tokens: int
+    output_tokens: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> Usage:
+        return cls(
+            input_tokens=d["input_tokens"],
+            output_tokens=d["output_tokens"],
+        )
+
+
+@dataclass
 class Message:
     """A unified message in the conversation.
 
     - role "user": content is the user's text input.
     - role "assistant": content is the LLM's text response (may be empty
       if the response consists solely of tool calls). tool_calls holds
-      any tool invocations the LLM requested.
+      any tool invocations the LLM requested. usage holds the token usage
+      reported for that assistant response (for cost tracking).
     - role "tool": content is the tool execution result. tool_call_id
       links it back to the originating ToolCall.
     """
@@ -46,6 +68,7 @@ class Message:
     content: str = ""
     tool_calls: list[ToolCall] = field(default_factory=list)
     tool_call_id: str | None = None  # only for role="tool"
+    usage: Usage | None = None  # only for role="assistant"
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a plain dict (for persistence/debugging)."""
@@ -57,6 +80,8 @@ class Message:
             ]
         if self.tool_call_id:
             d["tool_call_id"] = self.tool_call_id
+        if self.usage is not None:
+            d["usage"] = self.usage.to_dict()
         return d
 
     @classmethod
@@ -66,11 +91,13 @@ class Message:
             ToolCall(id=tc["id"], name=tc["name"], arguments=tc["arguments"])
             for tc in d.get("tool_calls", [])
         ]
+        usage = Usage.from_dict(d["usage"]) if d.get("usage") else None
         return cls(
             role=d["role"],
             content=d.get("content", ""),
             tool_calls=tool_calls,
             tool_call_id=d.get("tool_call_id"),
+            usage=usage,
         )
 
     @classmethod
@@ -79,9 +106,17 @@ class Message:
 
     @classmethod
     def assistant(
-        cls, content: str = "", tool_calls: list[ToolCall] | None = None
+        cls,
+        content: str = "",
+        tool_calls: list[ToolCall] | None = None,
+        usage: Usage | None = None,
     ) -> Message:
-        return cls(role="assistant", content=content, tool_calls=tool_calls or [])
+        return cls(
+            role="assistant",
+            content=content,
+            tool_calls=tool_calls or [],
+            usage=usage,
+        )
 
     @classmethod
     def tool(cls, tool_call_id: str, content: str, is_error: bool = False) -> Message:

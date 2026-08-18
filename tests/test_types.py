@@ -1,6 +1,6 @@
 """Tests for LLM type definitions."""
 
-from src.llm.types import Message, ToolCall, ToolSpec, ToolResult
+from src.llm.types import Message, ToolCall, ToolResult, ToolSpec, Usage
 
 
 class TestMessage:
@@ -120,3 +120,26 @@ class TestToolSpec:
         assert d["name"] == "echo"
         assert d["description"] == "Echo tool"
         assert d["parameters"]["type"] == "object"
+
+
+class TestUsage:
+    def test_to_dict(self):
+        usage = Usage(input_tokens=10, output_tokens=20)
+        assert usage.to_dict() == {"input_tokens": 10, "output_tokens": 20}
+
+    def test_from_dict(self):
+        usage = Usage.from_dict({"input_tokens": 10, "output_tokens": 20})
+        assert usage.input_tokens == 10
+        assert usage.output_tokens == 20
+
+    def test_message_usage_round_trip(self):
+        original = Message.assistant("hi", usage=Usage(10, 20))
+        restored = Message.from_dict(original.to_dict())
+        assert restored.usage is not None
+        assert restored.usage.input_tokens == 10
+        assert restored.usage.output_tokens == 20
+
+    def test_message_without_usage(self):
+        msg = Message.assistant("hi")
+        assert msg.usage is None
+        assert "usage" not in msg.to_dict()

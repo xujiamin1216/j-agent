@@ -10,6 +10,8 @@ Commands:
 
 from __future__ import annotations
 
+import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -23,6 +25,7 @@ from src.llm.factory import create_provider
 from src.memory.context_manager import ContextManager, ContextManagerConfig
 from src.memory.conversation import Session
 from src.memory.token_counter import create_token_counter
+from src.observability.tracer import Tracer
 from src.permission.manager import PermissionManager, PermissionMode
 from src.permission.risk import RiskLevel
 from src.planning.plan import Plan
@@ -84,8 +87,13 @@ def _subagent_tools_factory(work_dir: Path | None):
     return factory
 
 
-def create_agent(config: Config | None = None, ctx: WorkContext | None = None) -> Agent:
-    """Create an agent with default config and tools."""
+def create_agent(
+    config: Config | None = None,
+    ctx: WorkContext | None = None,
+    tracer: Tracer | None = None,
+    debug: bool = False,
+) -> Agent:
+    """Create an agent with default config, tools, and observability hooks."""
     cfg = config or Config.from_env()
     provider = create_provider(cfg)
     work_dir = ctx.work_dir if ctx else None
@@ -122,7 +130,46 @@ def create_agent(config: Config | None = None, ctx: WorkContext | None = None) -
             tool.runner = runner
 
     def on_event(event: str, data: dict) -> None:
-        if event == "tool_call":
+        if event == "llm_request" and debug:
+            console.print(
+                Panel(
+                    f"[bold]model[/]: {data['model']}\n"
+                    f"[bold]messages[/]: {data['message_count']}\n"
+                    f"[bold]tools[/]: {', '.join(data['tool_names']) or '-'}",
+                    title="[bold magenta]llm request[/]",
+                    border_style="magenta",
+                )
+            )
+            console.print(
+                Syntax(
+                    json.dumps(data["messages"], indent=2, ensure_ascii=False),
+                    "json",
+                    theme="monokai",
+                    word_wrap=True,
+                )
+            )
+        elif event == "llm_response" and debug:
+            console.print(
+                Panel(
+                    Syntax(
+                        json.dumps(
+                            {
+                                "content": data["content"],
+                                "tool_calls": data["tool_calls"],
+                                "usage": data["usage"],
+                            },
+                            indent=2,
+                            ensure_ascii=False,
+                        ),
+                        "json",
+                        theme="monokai",
+                        word_wrap=True,
+                    ),
+                    title="[bold magenta]llm response[/]",
+                    border_style="magenta",
+                )
+            )
+        elif event == "tool_call":
             console.print(
                 Panel(
                     Syntax(
@@ -165,6 +212,7 @@ def create_agent(config: Config | None = None, ctx: WorkContext | None = None) -
         on_event=on_event,
         context_manager=context_manager,
         permission_manager=permission_manager,
+        tracer=tracer,
     )
 
 
@@ -200,13 +248,28 @@ def _ask_permission(console: Console):
 
 def _format_arguments(args: dict) -> str:
     """Format tool arguments as pretty JSON."""
-    import json
-
     return json.dumps(args, indent=2, ensure_ascii=False)
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     """Entry point for the j-agent CLI."""
+    parser = argparse.ArgumentParser(
+        prog="j-agent",
+        description="Harness Engineering Practice Agent",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="实时显示完整的 LLM 请求/响应",
+    )
+    parser.add_argument(
+        "--trace",
+        type=Path,
+        metavar="FILE",
+        help="执行轨迹写入 JSONL 文件",
+    )
+    args = parser.parse_args(argv)
+
     console = Console()
 
     try:
@@ -223,8 +286,9 @@ def main() -> None:
         )
         sys.exit(1)
 
+    tracer = Tracer(trace_file=args.trace)
     ctx = WorkContext.from_cwd()
-    agent = create_agent(config, ctx)
+    agent = create_agent(config, ctx, tracer=tracer, debug=args.debug)
     skills = discover_skills(ctx.skills_dir)
 
     console.print(BANNER, style="bold cyan")
@@ -278,6 +342,26 @@ def main() -> None:
             )
         except Exception as e:
             console.print(f"[bold red]Error:[/] {type(e).__name__}: {e}")
+
+    _print_summary(console, tracer)
+
+
+def _print_summary(console: Console, tracer: Tracer | None) -> None:
+    """Print a session-end usage/cost summary if any calls were made."""
+    if tracer is None or tracer.llm_calls == 0:
+        return
+    s = tracer.summary()
+    console.print(
+        Panel(
+            f"[bold]LLM 调用[/]: {s['llm_calls']}\n"
+            f"[bold]工具调用[/]: {s['tool_calls']}\n"
+            f"[bold]输入 tokens[/]: {s['input_tokens']}\n"
+            f"[bold]输出 tokens[/]: {s['output_tokens']}\n"
+            f"[bold]总花费[/]: ${s['total_cost_usd']}",
+            title="会话统计",
+            border_style="cyan",
+        )
+    )
 
 
 def _handle_command(

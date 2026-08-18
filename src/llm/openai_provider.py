@@ -11,7 +11,7 @@ import json
 from openai import OpenAI
 
 from src.llm.base import LLMProvider
-from src.llm.types import Message, ToolCall, ToolSpec
+from src.llm.types import Message, ToolCall, ToolSpec, Usage
 
 
 class OpenAIProvider(LLMProvider):
@@ -71,9 +71,17 @@ class OpenAIProvider(LLMProvider):
                     )
                 )
 
+        usage = None
+        if getattr(response, "usage", None) is not None:
+            usage = Usage(
+                input_tokens=response.usage.prompt_tokens,
+                output_tokens=response.usage.completion_tokens,
+            )
+
         return Message.assistant(
             content=msg.content or "",
             tool_calls=tool_calls,
+            usage=usage,
         )
 
     def _to_openai_msg(self, msg: Message) -> dict:

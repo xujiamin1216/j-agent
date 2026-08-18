@@ -90,6 +90,16 @@ Skills 是用户定义的 prompt 模板，LLM 根据自然语言触发条件自�
 - **会话持久化**：`Session.plan` 字段保存/加载计划；`/save` 保存 `agent.plan`，`/load` 通过 `agent.plan.replace(session.plan)` 恢复。
 - **CLI 命令**：`/plan` 查看当前任务计划。
 
+### 可观测性 (`src/observability/`)
+
+让 Agent 的行为可调试、可追溯：结构化记录 LLM/工具调用、调试模式、执行轨迹落盘、按模型价格计算成本。
+
+- **Usage**（`llm/types.py`）：`Usage`（input_tokens/output_tokens）dataclass，`Message.usage` 可选字段，`to_dict`/`from_dict` 序列化。Claude 从 `response.usage.input/output_tokens` 提取，OpenAI 从 `prompt/completion_tokens` 提取。
+- **追踪器**（`observability/tracer.py`）：`Tracer` 记录 `llm_call`（model/usage/耗时/成本）与 `tool_call`（name/参数/是否出错/耗时）事件，聚合 token 用量与成本；构造时传入 `trace_file` 则同时追加写 JSONL。
+- **价格表**（`observability/pricing.py`）：`PRICING` 字典按 model 关键词（最长优先、不区分大小写）匹配 `(input, output)` USD/1M tokens；`estimate_cost()` 未知模型返回 0。
+- **Agent 集成**（`agent.py`）：`Agent` 接受可选 `tracer`，用 `time.perf_counter()` 计时 LLM 与工具调用并记录；发出 `llm_request`/`llm_response` 事件。
+- **CLI 参数**：`--debug` 实时显示完整请求/响应（模型、消息、工具、usage）；`--trace <file>` 轨迹写入 JSONL。Tracer 始终构造，会话结束输出「会话统计」面板（调用次数、token、总花费）。
+
 ## 设计文档
 
 总方案 SDD 位于 `docs/SDD.md`，各阶段详细设计拆分为独立文档：
@@ -101,7 +111,7 @@ Skills 是用户定义的 prompt 模板，LLM 根据自然语言触发条件自�
 - `docs/phase-skills.md` -- Skills: Skill prompt 模板与自然语言触发（已完成）
 - `docs/phase-4.md` -- Phase 4: 权限系统（已完成）
 - `docs/phase-5.md` -- Phase 5: 规划与子 Agent（已完成）
-- `docs/phase-6.md` -- Phase 6: 可观测性（待开发）
+- `docs/phase-6.md` -- Phase 6: 可观测性（已完成）
 
 ## 约定
 

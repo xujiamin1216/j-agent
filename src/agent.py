@@ -11,6 +11,7 @@ calls, up to a maximum iteration limit to prevent runaway loops.
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Callable
 
 from src.config import Config
@@ -21,6 +22,7 @@ from src.tools.base import ToolRegistry
 
 if TYPE_CHECKING:
     from src.memory.context_manager import ContextManager
+    from src.observability.tracer import Tracer
     from src.permission.manager import PermissionManager
 
 # Maximum consecutive LLM calls for a single user turn. Prevents infinite
@@ -43,6 +45,7 @@ class Agent:
         context_manager: ContextManager | None = None,
         permission_manager: PermissionManager | None = None,
         plan: Plan | None = None,
+        tracer: Tracer | None = None,
     ) -> None:
         self._config = config
         self._provider = provider
@@ -52,6 +55,7 @@ class Agent:
         self._context_manager = context_manager
         self._permission_manager = permission_manager
         self._plan = plan or Plan()
+        self._tracer = tracer
 
     @property
     def tools(self) -> ToolRegistry:
@@ -87,11 +91,42 @@ class Agent:
                 if info:
                     self._on_event("context_managed", info)
 
+            self._on_event(
+                "llm_request",
+                {
+                    "model": self._config.model,
+                    "message_count": len(self._messages),
+                    "tool_names": [s.name for s in (tool_specs or [])],
+                    "system": self._config.system_prompt,
+                    "messages": [m.to_dict() for m in self._messages],
+                },
+            )
+
+            start = time.perf_counter()
             response = self._provider.chat(
                 messages=self._messages,
                 tools=tool_specs,
                 system=self._config.system_prompt,
             )
+            duration_ms = (time.perf_counter() - start) * 1000
+
+            if self._tracer:
+                self._tracer.record_llm_call(
+                    self._config.model, response.usage, duration_ms
+                )
+
+            self._on_event(
+                "llm_response",
+                {
+                    "content": response.content,
+                    "tool_calls": [
+                        {"name": tc.name, "arguments": tc.arguments}
+                        for tc in response.tool_calls
+                    ],
+                    "usage": response.usage.to_dict() if response.usage else None,
+                },
+            )
+
             self._messages.append(response)
 
             # If the LLM didn't request any tools, we're done.
@@ -106,7 +141,14 @@ class Agent:
                     {"name": tc.name, "arguments": tc.arguments},
                 )
 
+                start = time.perf_counter()
                 result = self._execute_tool(tc)
+                duration_ms = (time.perf_counter() - start) * 1000
+
+                if self._tracer:
+                    self._tracer.record_tool_call(
+                        tc.name, tc.arguments, result.is_error, duration_ms
+                    )
 
                 self._on_event(
                     "tool_result",
